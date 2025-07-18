@@ -34,7 +34,6 @@ with tab2:
     st.subheader("Initiate Structured Problem Solving (8D)")
     st.info("The 8D process ensures a thorough and documented approach to root cause analysis and corrective action.")
     with st.form("8d_form"):
-        # ... (rest of the form remains the same)
         st.text_input("Part Number", "KU-ASIC-COM-001")
         st.selectbox("Supplier", st.session_state['suppliers']['Supplier'].unique())
         st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #KUI-7891 showed lifted wire bonds on Pad 14.")
@@ -47,6 +46,21 @@ with tab2:
 with tab3:
     st.subheader("Visualizing the Closed-Loop Process")
     st.caption("This Sankey diagram illustrates the ideal flow of information: a problem detected at the OSAT is traced back to the foundry, and a corrective action at the foundry results in improved quality downstream. This is the goal of our integrated quality system.")
-    fig_sankey = go.Figure(data=[go.Sankey(...)]) # Sankey chart code is fine as is
-    fig_sankey.update_layout(title_text="Example: OSAT Test Failure -> Foundry Corrective Action")
+    
+    # THIS IS THE CORRECTED SANKEY CHART CODE
+    fig_sankey = go.Figure(data=[go.Sankey(
+        node=dict(
+            pad=15,
+            thickness=20,
+            line=dict(color="black", width=0.5),
+            label=["OSAT Test Failures (High DPPM)", "Foundry Process Drift", "Improved OSAT Yield", "Failure Analysis (RCA)", "Foundry CAPA", "Wafer Parametric Data"],
+            color=["red", "orange", "green", "blue", "blue", "blue"]
+        ),
+        link=dict(
+            source=[0, 1, 3, 3, 4],
+            target=[3, 3, 4, 5, 2],
+            value=[10, 5, 8, 4, 12]
+        ))])
+
+    fig_sankey.update_layout(title_text="Example: OSAT Test Failure -> Foundry Corrective Action", font_size=12)
     st.plotly_chart(fig_sankey, use_container_width=True)
