@@ -62,15 +62,16 @@ failures = app_data['failures']
 
 # --- SIDEBAR NAVIGATION AND NARRATIVE ---
 st.sidebar.title("🛰️ Kuiper SQE Command Center")
+st.sidebar.markdown("---")
 st.sidebar.info(
     """
-    This application is a functional portfolio piece demonstrating the capabilities required for the **Sr. Supplier Quality Engineer (ASIC)** role at Project Kuiper.
+    This application is a functional portfolio piece demonstrating the tools and analytical mindset required for the **Sr. Supplier Quality Engineer (ASIC)** role at Project Kuiper.
     
-    Navigate through the SQE workflow using the modules below.
+    Each page represents a core SQE workflow, from high-level monitoring to deep-dive analysis and action.
     """
 )
-st.sidebar.header("Navigation")
-
+st.sidebar.markdown("---")
+st.sidebar.header("Workflow Modules")
 
 # --- UI RENDER ---
 st.title("Executive Summary: Global Command Center")
@@ -88,24 +89,23 @@ def create_sparkline(data, y_axis, color):
 col1, col2, col3 = st.columns(3)
 with col1:
     avg_health = int(suppliers['Health_Score'].mean())
-    st.metric("Avg. Supplier Health", f"{avg_health}/100", f"{avg_health-82} vs Q2 Avg", delta_color="normal")
-    st.caption("What: A weighted score of Quality, Delivery, and Responsiveness. Why: Provides a single, comparable metric for overall supplier performance.")
+    st.metric("Avg. Supplier Health", f"{avg_health}/100")
+    st.caption("A weighted score of Quality, Delivery, and Responsiveness.")
 with col2:
     active_issues = failures[failures['Status'] != 'Closed'].shape[0]
-    st.metric("Active High-Priority Issues", f"{active_issues}", f"{active_issues - 1} vs last week", delta_color="inverse")
-    st.caption("What: A live count of open SCARs and Failure Analyses. Why: This is a direct measure of the current problem-solving workload and outstanding risks.")
+    st.metric("Active High-Priority Issues", f"{active_issues}")
+    st.caption("A live count of open SCARs and Failure Analyses.")
 with col3:
     latest_dppm = agg_perf_30d.iloc[-1]['DPPM']
-    st.metric("Aggregate DPPM (Daily)", f"{int(latest_dppm)}", f"{int(latest_dppm - agg_perf_30d.iloc[-2]['DPPM'])} vs yesterday", delta_color="inverse")
+    st.metric("Aggregate DPPM (Daily)", f"{int(latest_dppm)}")
     st.plotly_chart(create_sparkline(agg_perf_30d, 'DPPM', 'red'), use_container_width=True, key="spark_dppm")
-    st.caption("What: Defects Per Million across all OSATs. Why: This sparkline provides immediate visual context. Is the trend flat, rising (bad), or falling (good)?")
+    st.caption("Defects Per Million across all OSATs.")
 
 st.divider()
-# ... The rest of the page remains the same, it is already well-polished ...
 col1, col2 = st.columns((2, 1))
 with col1:
     st.subheader("Supplier Scorecard Matrix")
-    st.markdown("- **What:** A live ranking of all suppliers on critical KPIs. \n- **Why (Actionability):** This is the primary tool for prioritizing attention. A supplier with a low Health Score and high DPPM requires immediate investigation.")
+    st.markdown("- **Actionability:** This is the primary tool for prioritizing attention. A supplier with a low Health Score and high DPPM requires immediate investigation.")
     summary_df = suppliers.copy()
     latest_perf = perf_df.loc[perf_df.groupby('Supplier')['Date'].idxmax()]
     summary_df = pd.merge(summary_df, latest_perf[['Supplier', 'Yield', 'DPPM']], on='Supplier')
@@ -120,7 +120,7 @@ with col1:
     st.dataframe(style_scorecard(summary_df[['Supplier', 'Type', 'Health_Score', 'Yield', 'DPPM', 'Open_SCARs']]), use_container_width=True)
     
     st.subheader("ML: Supplier Risk Forecast (Next Quarter)")
-    st.markdown("- **What:** A bar chart showing the predicted probability of a supplier's Health Score dropping into the 'At Risk' category. \n- **Why (Actionability):** This proactively identifies suppliers who are *trending* towards poor performance, enabling preventive action instead of reactive fire-fighting.")
+    st.markdown("- **Actionability:** This proactively identifies suppliers who are *trending* towards poor performance, enabling preventive action instead of reactive fire-fighting.")
     summary_df['Risk_Prob'] = (100 - summary_df['Health_Score']) / 100.0 + summary_df['Open_SCARs'] * 0.1
     summary_df['Risk_Prob'] = np.clip(summary_df['Risk_Prob'], 0.05, 0.95)
     fig_risk = px.bar(summary_df.sort_values('Risk_Prob', ascending=True), 
@@ -133,7 +133,7 @@ with col1:
 
 with col2:
     st.subheader("Supplier Health Distribution")
-    st.markdown("- **What:** A visual breakdown of suppliers by their current health status. \n- **Why (Actionability):** Provides a high-level portfolio view. A large 'Critical' slice indicates systemic supply chain risk.")
+    st.markdown("- **Actionability:** Provides a high-level portfolio view. A large 'Critical' slice indicates systemic supply chain risk.")
     def get_status(score):
         if score < 70: return 'Critical';
         if score < 90: return 'Warning';
@@ -145,7 +145,7 @@ with col2:
     st.plotly_chart(fig_donut, use_container_width=True, key="donut_health")
 
     st.subheader("Top Failure Modes (Pareto Chart)")
-    st.markdown("- **What:** A bar chart showing the most frequent failure modes across all suppliers. \n- **Why (Actionability):** Applies the Pareto Principle (80/20 rule). Focusing improvement efforts on the top 1-2 failure modes will yield the largest quality impact.")
+    st.markdown("- **Actionability:** Applies the Pareto Principle (80/20 rule). Focusing improvement efforts on the top 1-2 failure modes will yield the largest quality impact.")
     failure_counts = failures['Failure_Mode'].value_counts().reset_index()
     fig_pareto = px.bar(failure_counts.head(5), 
                         x='count', y='Failure_Mode', orientation='h',
