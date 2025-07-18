@@ -81,7 +81,10 @@ st.markdown("High-level health summary of the entire Kuiper ASIC supply chain, a
 
 # --- KPIs with Contextual Plots ---
 st.subheader("Key Performance Indicators (Last 30 Days)")
-agg_perf_30d = perf_df[perf_df['Date'] >= perf_df['Date'].max() - pd.Timedelta(days=30)].groupby('Date').mean().reset_index()
+
+# THIS IS THE CORRECTED LINE
+agg_perf_30d = perf_df[perf_df['Date'] >= perf_df['Date'].max() - pd.Timedelta(days=30)].groupby('Date').mean(numeric_only=True).reset_index()
+
 
 def create_sparkline(data, y_axis, color):
     fig = go.Figure(go.Scatter(x=data['Date'], y=data[y_axis], mode='lines', line=dict(color=color, width=2), fill='tozeroy'))
