@@ -5,12 +5,16 @@ import plotly.graph_objects as go
 
 st.set_page_config(layout="wide", page_title="Failure Analysis Hub", page_icon="🔧")
 
-if 'data_loaded' not in st.session_state:
-    st.error("Data not loaded. Please go to the main page first.")
+# --- ROBUST STATE CHECK ---
+if 'app_data' not in st.session_state:
+    st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
     st.stop()
 
-failures = st.session_state['failures']
+# Unpack data from the session state dictionary
+failures = st.session_state['app_data']['failures']
+suppliers = st.session_state['app_data']['suppliers']
 
+# --- UI RENDER ---
 st.markdown("# 🔧 Failure Analysis (FRACAS) Hub")
 st.markdown("A central system for Failure Reporting, Analysis, and Corrective Action. This is the core of our closed-loop quality system.")
 
@@ -19,7 +23,7 @@ st.caption("Tracking failure modes over time helps identify systemic issues or t
 failures['Month'] = failures['Date_Reported'].dt.to_period('M').astype(str)
 trend_data = failures.groupby(['Month', 'Failure_Mode']).size().reset_index(name='Count')
 fig_trend = px.area(trend_data, x='Month', y='Count', color='Failure_Mode', title="Monthly Failure Reports by Type")
-st.plotly_chart(fig_trend, use_container_width=True)
+st.plotly_chart(fig_trend, use_container_width=True, key="failure_trend_chart")
 
 st.divider()
 
@@ -35,7 +39,7 @@ with tab2:
     st.info("The 8D process ensures a thorough and documented approach to root cause analysis and corrective action.")
     with st.form("8d_form"):
         st.text_input("Part Number", "KU-ASIC-COM-001")
-        st.selectbox("Supplier", st.session_state['suppliers']['Supplier'].unique())
+        st.selectbox("Supplier", suppliers['Supplier'].unique())
         st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #KUI-7891 showed lifted wire bonds on Pad 14.")
         st.text_area("Interim Containment Action (D3)", "Placed Lot #KUI-7891 on hold. Screened all remaining units from the wafer lot. Segregated suspect units.")
         st.multiselect("Team Members (D1)", ["J. Doe (SQE)", "S. Smith (Design)", "R. Chen (Supplier Quality)"])
@@ -47,20 +51,15 @@ with tab3:
     st.subheader("Visualizing the Closed-Loop Process")
     st.caption("This Sankey diagram illustrates the ideal flow of information: a problem detected at the OSAT is traced back to the foundry, and a corrective action at the foundry results in improved quality downstream. This is the goal of our integrated quality system.")
     
-    # THIS IS THE CORRECTED SANKEY CHART CODE
     fig_sankey = go.Figure(data=[go.Sankey(
         node=dict(
-            pad=15,
-            thickness=20,
-            line=dict(color="black", width=0.5),
+            pad=15, thickness=20, line=dict(color="black", width=0.5),
             label=["OSAT Test Failures (High DPPM)", "Foundry Process Drift", "Improved OSAT Yield", "Failure Analysis (RCA)", "Foundry CAPA", "Wafer Parametric Data"],
             color=["red", "orange", "green", "blue", "blue", "blue"]
         ),
         link=dict(
-            source=[0, 1, 3, 3, 4],
-            target=[3, 3, 4, 5, 2],
-            value=[10, 5, 8, 4, 12]
+            source=[0, 1, 3, 3, 4], target=[3, 3, 4, 5, 2], value=[10, 5, 8, 4, 12]
         ))])
 
     fig_sankey.update_layout(title_text="Example: OSAT Test Failure -> Foundry Corrective Action", font_size=12)
-    st.plotly_chart(fig_sankey, use_container_width=True)
+    st.plotly_chart(fig_sankey, use_container_width=True, key="sankey_diagram")
