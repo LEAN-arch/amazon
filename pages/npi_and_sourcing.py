@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(layout="wide", page_title="NPI & Sourcing", page_icon="🚀")
 
@@ -10,49 +11,138 @@ if 'app_data' not in st.session_state:
     st.stop()
 
 # --- UI RENDER ---
-st.markdown("# 🚀 NPI & 2nd Source Qualification")
-st.markdown("Monitor the pipeline for new supplier onboarding and use data to make strategic sourcing decisions.")
+st.markdown("# 🚀 NPI & Strategic Sourcing Hub")
+st.markdown("This hub provides tools for data-driven supplier selection and for managing the rigorous qualification process required for an aerospace supply chain.")
 
-npi_data = {
-    'Supplier': ['Future Foundries LLC', 'Global Test Solutions', 'NextGen Packaging', 'AeroChip Test'],
-    'Part_Type': ['RF ASIC', 'Power Mgmt ASIC', 'Memory Controller', 'Power Mgmt ASIC'],
-    'Stage': ['2. Initial Audit', '4. Reliability Testing', '1. Discovery', '5. Full Qualification'],
-    'Audit_Score': [85, 92, 78, 95], 'Quoted_Cost': [2.50, 1.80, 1.50, 2.10], 'Risk': ['Medium', 'Low', 'Medium', 'Low'],
-    'Next_Milestone': ['On-site Audit Q4', 'Complete 1000hr HTOL', 'Sign NDA', 'Production Ramp']
-}
-npi_df = pd.DataFrame(npi_data)
+tab_decision, tab_audit = st.tabs(["Supplier Decision Matrix", "Qualification Audit Deep Dive"])
 
-st.subheader("Strategic Sourcing Matrix")
-st.markdown("""
-- **What:** A bubble chart plotting potential suppliers based on their qualification audit score versus their quoted cost. The size of the bubble represents the audit score.
-- **How:** Data from audits and supplier quotes is plotted on a 2x2 matrix, with averages for cost and quality used as the dividing lines.
-- **Why (Actionability):** This is a key tool for data-driven sourcing decisions. The ideal partner is in the **top-left quadrant (High Quality, Low Cost)**. It immediately highlights trade-offs, such as a low-cost but low-quality supplier (`NextGen Packaging`) versus a high-quality but high-cost one (`AeroChip Test`). This facilitates strategic discussions.
-""")
-fig_scatter = px.scatter(
-    npi_df, x='Quoted_Cost', y='Audit_Score',
-    size='Audit_Score', color='Risk', hover_name='Supplier', text='Supplier',
-    title="Quality vs. Cost Analysis for Potential Suppliers",
-    labels={'Quoted_Cost': 'Quoted Cost per Unit ($)', 'Audit_Score': 'Qualification Audit Score'}
-)
-fig_scatter.update_traces(textposition='top center')
-fig_scatter.add_vline(x=npi_df['Quoted_Cost'].mean(), line_dash="dash", annotation_text="Avg. Cost")
-fig_scatter.add_hline(y=npi_df['Audit_Score'].mean(), line_dash="dash", annotation_text="Avg. Score")
-st.plotly_chart(fig_scatter, use_container_width=True, key="sourcing_scatter")
+# ==============================================================================
+# TAB 1: Supplier Decision Matrix
+# ==============================================================================
+with tab_decision:
+    st.header("Multi-Criteria Decision Matrix (MCDM) for Supplier Selection")
+    st.markdown("""
+    - **What:** An interactive scorecard for evaluating and comparing potential suppliers across multiple weighted criteria.
+    - **How:** The SQE sets the relative importance (weight) for each category. The tool then calculates a final weighted score for each supplier, providing a data-driven ranking.
+    - **Why (Actionability):** This demonstrates the ability to **"define requirements and deploy processes"** for sourcing. It moves beyond a simple cost vs. quality trade-off to a holistic, risk-based decision model. A Sr. SQE can adjust the weights based on the specific needs of the component (e.g., for a mission-critical ASIC, 'Technical Capability' might be weighted heaviest), ensuring the best supplier is chosen for the specific application.
+    """)
+    
+    # --- Interactive Weight Sliders ---
+    with st.sidebar:
+        st.header("Decision Criteria Weights")
+        st.caption("Adjust the importance of each category. Weights must sum to 100.")
+        w_qms = st.slider("Quality System Maturity (%)", 0, 100, 35)
+        w_tech = st.slider("Technical Capability (%)", 0, 100, 30)
+        w_cost = st.slider("Cost & Commercial (%)", 0, 100, 15)
+        w_scale = st.slider("Scalability & Supply Chain (%)", 0, 100, 20)
+        
+        # Check if weights sum to 100
+        total_weight = w_qms + w_tech + w_cost + w_scale
+        if total_weight != 100:
+            st.error(f"Total weight is {total_weight}%. Please adjust sliders to sum to 100.")
+            st.stop()
 
-st.divider()
+    # --- Supplier Data for MCDM ---
+    @st.cache_data
+    def get_npi_data():
+        return pd.DataFrame({
+            'Supplier': ['Future Foundries LLC', 'Global Test Solutions', 'NextGen Packaging', 'AeroChip Test'],
+            'Part_Type': ['RF ASIC', 'Power Mgmt ASIC', 'Memory Controller', 'Power Mgmt ASIC'],
+            'QMS_Score': [85, 92, 78, 95], # Audit Score
+            'Tech_Score': [90, 85, 88, 98], # Design/Process review score
+            'Cost_Score': [70, 85, 90, 65], # 100 = lowest cost
+            'Scale_Score': [80, 82, 75, 95]  # Capacity/BCP score
+        })
+    npi_df = get_npi_data()
 
-st.subheader("Qualification Kanban Pipeline")
-st.caption("Track the progress of each potential supplier through the qualification stages.")
-stages = ['1. Discovery', '2. Initial Audit', '3. Sample Evaluation', '4. Reliability Testing', '5. Full Qualification']
-cols = st.columns(len(stages))
-for i, stage in enumerate(stages):
-    with cols[i]:
-        st.subheader(stage)
-        suppliers_in_stage = npi_df[npi_df['Stage'] == stage]
-        for index, supplier in suppliers_in_stage.iterrows():
-            risk_color = "green" if supplier['Risk'] == 'Low' else ('orange' if supplier['Risk'] == 'Medium' else 'red')
-            with st.container(border=True):
-                st.markdown(f"**{supplier['Supplier']}**")
-                st.caption(f"Part: {supplier['Part_Type']}")
-                st.markdown(f"Risk: <font color='{risk_color}'>{supplier['Risk']}</font>", unsafe_allow_html=True)
-                st.write(f"Next Step: {supplier['Next_Milestone']}")
+    # Calculate Weighted Score
+    npi_df['Weighted_Score'] = (
+        (npi_df['QMS_Score'] * w_qms / 100) +
+        (npi_df['Tech_Score'] * w_tech / 100) +
+        (npi_df['Cost_Score'] * w_cost / 100) +
+        (npi_df['Scale_Score'] * w_scale / 100)
+    )
+
+    st.subheader("Supplier Scorecard & Recommendation")
+    st.dataframe(
+        npi_df.sort_values("Weighted_Score", ascending=False),
+        use_container_width=True,
+        column_config={
+            "Weighted_Score": st.column_config.ProgressColumn(
+                "Final Weighted Score", min_value=50, max_value=100, format="%.1f"
+            )
+        }
+    )
+    recommended_supplier = npi_df.loc[npi_df['Weighted_Score'].idxmax()]
+    st.success(f"**Recommendation:** Based on the current weights, **{recommended_supplier['Supplier']}** is the highest-scoring candidate.", icon="🏆")
+    
+    st.subheader("Strategic Sourcing Matrix")
+    st.caption("This plot visualizes the final weighted score against the supplier's cost score, providing a final strategic check.")
+    fig_scatter = px.scatter(
+        npi_df, x='Cost_Score', y='Weighted_Score',
+        size='Weighted_Score', color='Supplier', hover_name='Supplier',
+        title="Overall Score vs. Cost Score",
+        labels={'Cost_Score': 'Cost Score (Higher is Better)', 'Weighted_Score': 'Final Weighted Score'}
+    )
+    fig_scatter.add_vline(x=npi_df['Cost_Score'].mean(), line_dash="dash", annotation_text="Avg. Cost Score")
+    fig_scatter.add_hline(y=npi_df['Weighted_Score'].mean(), line_dash="dash", annotation_text="Avg. Overall Score")
+    st.plotly_chart(fig_scatter, use_container_width=True, key="sourcing_scatter_final")
+
+# ==============================================================================
+# TAB 2: Qualification Audit Deep Dive
+# ==============================================================================
+with tab_audit:
+    st.header("Qualification Audit Workspace")
+    st.markdown("Select a supplier from the NPI pipeline to review their AS9100D qualification audit status and findings.")
+
+    selected_supplier_audit = st.selectbox(
+        "Select Supplier for Audit Review",
+        npi_df['Supplier'].unique(),
+        key="audit_supplier_select"
+    )
+
+    # Simulate audit data for the selected supplier
+    st.info(f"**Viewing Audit Details for:** `{selected_supplier_audit}`")
+
+    # This data would be pulled from a real audit management system
+    audit_progress = np.random.randint(70, 100) if selected_supplier_audit != 'NextGen Packaging' else 45
+    audit_status = {
+        "7.5 Documented Information": "Passed",
+        "8.1 Operational Planning & Control": "Passed",
+        "8.3 Design & Development": "Minor CAR",
+        "8.4 Control of External Providers": "Passed",
+        "8.5.1 Control of Production": "Major CAR",
+        "9.1 Monitoring & Measurement": "Passed"
+    }
+    
+    col1, col2 = st.columns([1, 2])
+    with col1:
+        st.subheader("Audit Progress")
+        fig_gauge = go.Figure(go.Indicator(
+            mode="gauge+number",
+            value=audit_progress,
+            title={'text': "Overall Audit Completion (%)"},
+            gauge={'axis': {'range': [None, 100]}, 'bar': {'color': "darkblue"}}
+        ))
+        st.plotly_chart(fig_gauge, use_container_width=True, key="audit_gauge")
+        
+        st.subheader("Key Findings")
+        if audit_status["8.5.1 Control of Production"] == "Major CAR":
+            st.error("**Major CAR on 8.5.1:** Lack of documented process for validating special processes (e.g., wire bonding). Qualification cannot proceed until resolved.", icon="🚨")
+        if audit_status["8.3 Design & Development"] == "Minor CAR":
+            st.warning("**Minor CAR on 8.3:** Inconsistent documentation of design review outputs. Action plan required within 30 days.", icon="⚠️")
+        st.success("No other major findings noted.", icon="✅")
+
+    with col2:
+        st.subheader("AS9100D Clause Review Status")
+        st.markdown("""
+        - **What:** A checklist showing the status of the review for key AS9100D clauses.
+        - **Why (Actionability):** This demonstrates the hands-on activity of an **AS9100D Lead Auditor**. It provides a clear, actionable summary of the audit's progress and pinpoints the exact areas of the supplier's Quality Management System that are non-compliant and require corrective action (CARs).
+        """)
+        for clause, status in audit_status.items():
+            if status == "Passed":
+                st.markdown(f"- ✅ **{clause}:** `{status}`")
+            elif status == "Minor CAR":
+                st.markdown(f"- ⚠️ **{clause}:** `{status}`")
+            else:
+                st.markdown(f"- 🚨 **{clause}:** `{status}`")
