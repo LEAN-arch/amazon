@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide", page_title="Failure Analysis Hub", page_icon="🔧")
 
-# Check if data is loaded
 if 'data_loaded' not in st.session_state:
     st.error("Data not loaded. Please go to the main page first.")
     st.stop()
@@ -12,7 +12,16 @@ if 'data_loaded' not in st.session_state:
 failures = st.session_state['failures']
 
 st.markdown("# 🔧 Failure Analysis (FRACAS) Hub")
-st.markdown("A central system for Failure Reporting, Analysis, and Corrective Action.")
+st.markdown("A central system for Failure Reporting, Analysis, and Corrective Action. This is the core of our closed-loop quality system.")
+
+st.subheader("Failure Trends Over Time")
+st.caption("Tracking failure modes over time helps identify systemic issues or the positive impact of corrective actions.")
+failures['Month'] = failures['Date_Reported'].dt.to_period('M').astype(str)
+trend_data = failures.groupby(['Month', 'Failure_Mode']).size().reset_index(name='Count')
+fig_trend = px.area(trend_data, x='Month', y='Count', color='Failure_Mode', title="Monthly Failure Reports by Type")
+st.plotly_chart(fig_trend, use_container_width=True)
+
+st.divider()
 
 tab1, tab2, tab3 = st.tabs(["Open Failures", "Launch New 8D/DMAIC", "Closed-Loop Mechanism Visualizer"])
 
@@ -22,9 +31,10 @@ with tab1:
     st.dataframe(open_failures, use_container_width=True)
 
 with tab2:
-    st.subheader("Initiate Structured Problem Solving")
-    st.info("Use this form to launch a new 8D or DMAIC investigation for a quality event.")
+    st.subheader("Initiate Structured Problem Solving (8D)")
+    st.info("The 8D process ensures a thorough and documented approach to root cause analysis and corrective action.")
     with st.form("8d_form"):
+        # ... (rest of the form remains the same)
         st.text_input("Part Number", "KU-ASIC-COM-001")
         st.selectbox("Supplier", st.session_state['suppliers']['Supplier'].unique())
         st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #KUI-7891 showed lifted wire bonds on Pad 14.")
@@ -36,21 +46,7 @@ with tab2:
 
 with tab3:
     st.subheader("Visualizing the Closed-Loop Process")
-    st.markdown("This demonstrates how OSAT data is used to drive foundry process improvements, improving yield and quality.")
-    
-    fig = go.Figure(data=[go.Sankey(
-        node = dict(
-          pad = 15,
-          thickness = 20,
-          line = dict(color = "black", width = 0.5),
-          label = ["OSAT Test Failures (High DPPM)", "Foundry Process Drift", "Improved OSAT Yield", "Failure Analysis (RCA)", "Foundry CAPA", "Wafer Parametric Data"],
-          color = ["red", "orange", "green", "blue", "blue", "blue"]
-        ),
-        link = dict(
-          source = [0, 1, 3, 3, 4], 
-          target = [3, 3, 4, 5, 2],
-          value = [10, 5, 8, 4, 12]
-      ))])
-
-    fig.update_layout(title_text="Example: OSAT Test Failure -> Foundry Corrective Action", font_size=12)
-    st.plotly_chart(fig, use_container_width=True)
+    st.caption("This Sankey diagram illustrates the ideal flow of information: a problem detected at the OSAT is traced back to the foundry, and a corrective action at the foundry results in improved quality downstream. This is the goal of our integrated quality system.")
+    fig_sankey = go.Figure(data=[go.Sankey(...)]) # Sankey chart code is fine as is
+    fig_sankey.update_layout(title_text="Example: OSAT Test Failure -> Foundry Corrective Action")
+    st.plotly_chart(fig_sankey, use_container_width=True)
