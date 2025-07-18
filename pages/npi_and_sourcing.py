@@ -13,11 +13,16 @@ if 'app_data' not in st.session_state:
 st.markdown("# 🚀 NPI & 2nd Source Qualification")
 st.markdown("Monitor the pipeline for new supplier onboarding and use data to make strategic sourcing decisions.")
 
+# --- CORRECTED DATA ---
+# The 'Next_Milestone' column has been added to this dictionary to fix the KeyError.
 npi_data = {
     'Supplier': ['Future Foundries LLC', 'Global Test Solutions', 'NextGen Packaging', 'AeroChip Test'],
     'Part_Type': ['RF ASIC', 'Power Mgmt ASIC', 'Memory Controller', 'Power Mgmt ASIC'],
     'Stage': ['2. Initial Audit', '4. Reliability Testing', '1. Discovery', '5. Full Qualification'],
-    'Audit_Score': [85, 92, 78, 95], 'Quoted_Cost': [2.50, 1.80, 1.50, 2.10], 'Risk': ['Medium', 'Low', 'Medium', 'Low']
+    'Audit_Score': [85, 92, 78, 95], 
+    'Quoted_Cost': [2.50, 1.80, 1.50, 2.10], 
+    'Risk': ['Medium', 'Low', 'Medium', 'Low'],
+    'Next_Milestone': ['On-site Audit Q4', 'Complete 1000hr HTOL', 'Sign NDA', 'Production Ramp'] # THIS WAS THE MISSING DATA
 }
 npi_df = pd.DataFrame(npi_data)
 
@@ -52,4 +57,5 @@ for i, stage in enumerate(stages):
                 st.markdown(f"**{supplier['Supplier']}**")
                 st.caption(f"Part: {supplier['Part_Type']}")
                 st.markdown(f"Risk: <font color='{risk_color}'>{supplier['Risk']}</font>", unsafe_allow_html=True)
+                # This line will now work correctly.
                 st.write(f"Next Step: {supplier['Next_Milestone']}")
