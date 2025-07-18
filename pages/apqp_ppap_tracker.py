@@ -4,21 +4,24 @@ import plotly.figure_factory as ff
 
 st.set_page_config(layout="wide", page_title="APQP/PPAP Tracker", page_icon="📋")
 
-if 'data_loaded' not in st.session_state:
-    st.error("Data not loaded. Please go to the main page first.")
+# --- ROBUST STATE CHECK ---
+if 'app_data' not in st.session_state:
+    st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
     st.stop()
-    
-apqp_data = st.session_state['apqp_data']
 
+# Unpack data from the session state dictionary
+apqp_data = st.session_state['app_data']['apqp_data']
+
+# --- UI RENDER ---
 st.markdown("# 📋 APQP / PPAP Tracker (AS9145)")
 st.markdown("Manage New Product Introduction quality planning for all active ASIC projects.")
 
 st.subheader("NPI Project Timelines (Gantt Chart)")
 st.caption("This chart provides a high-level overview of all NPI project schedules, highlighting potential conflicts or delays.")
-# Create Gantt chart data
+
 gantt_df = apqp_data.rename(columns={'Part_Number': 'Task', 'Start': 'Start', 'Finish': 'Finish', 'Status': 'Resource'})
 fig_gantt = ff.create_gantt(gantt_df, index_col='Resource', show_colorbar=True, group_tasks=True, title="Project Timelines")
-st.plotly_chart(fig_gantt, use_container_width=True)
+st.plotly_chart(fig_gantt, use_container_width=True, key="gantt_chart")
 
 st.divider()
 
