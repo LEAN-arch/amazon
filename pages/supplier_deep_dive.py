@@ -104,7 +104,9 @@ with tab_forecast:
         st.subheader("Forecast Components")
         st.caption("Prophet deconstructs the forecast into its underlying components: overall trend, weekly, and yearly patterns.")
         fig_components = model.plot_components(forecast)
-        st.pyplot(fig_components, key="prophet_components_plot")
+        
+        # THIS IS THE CORRECTED LINE: The 'key' argument has been removed.
+        st.pyplot(fig_components)
 
 with tab_ml:
     st.header("Predictive Lot Disposition Engine")
