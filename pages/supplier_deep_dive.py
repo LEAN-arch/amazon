@@ -4,9 +4,6 @@ import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-
-# --- NEW IMPORTS ---
 from prophet import Prophet
 from pptx import Presentation
 from pptx.util import Inches
@@ -19,35 +16,22 @@ if 'app_data' not in st.session_state:
     st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
     st.stop()
 
-# Load data from the central state dictionary
+# Unpack data from the session state dictionary
 app_data = st.session_state['app_data']
 suppliers = app_data['suppliers']
 perf_df = app_data['performance_data']
 failures = app_data['failures']
 
-
+# --- UI RENDER ---
 st.markdown("# 🔬 Supplier Deep Dive")
 st.markdown("Analyze individual supplier performance, review process control data, and leverage ML for predictive quality.")
 
-selected_supplier = st.selectbox(
-    "Select a Supplier to Analyze",
-    suppliers['Supplier'].unique(),
-    key="supplier_select_deep_dive"
-)
+selected_supplier = st.selectbox("Select a Supplier to Analyze", suppliers['Supplier'].unique(), key="supplier_select_deep_dive")
 supplier_data = perf_df[perf_df['Supplier'] == selected_supplier].copy()
 supplier_info = suppliers[suppliers['Supplier'] == selected_supplier].iloc[0]
 
-# --- TABS FOR DIFFERENT ANALYSIS VIEWS ---
-tab_perf, tab_forecast, tab_ml, tab_report = st.tabs([
-    "Performance & SPC", 
-    "📈 Forecasting (Prophet)", 
-    "🤖 Predictive Disposition", 
-    "📋 Automated Reporting"
-])
+tab_perf, tab_forecast, tab_ml, tab_report = st.tabs(["Performance & SPC", "📈 Forecasting (Prophet)", "🤖 Predictive Disposition", "📋 Automated Reporting"])
 
-# ==============================================================================
-# TAB 1: Performance & SPC (Existing functionality, now consolidated)
-# ==============================================================================
 with tab_perf:
     st.header(f"Historical Performance for: {selected_supplier}")
     supplier_data['Yield_MA'] = supplier_data['Yield'].rolling(window=14).mean()
@@ -60,7 +44,6 @@ with tab_perf:
         fig_yield.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['Yield_MA'], mode='lines', name='14-Day Moving Avg', line=dict(color='blue', width=3)))
         fig_yield.update_layout(title="Yield Trend with Moving Average", yaxis_title="Yield (%)", yaxis_tickformat=".2%")
         st.plotly_chart(fig_yield, use_container_width=True, key="yield_chart")
-
     with col2:
         fig_dppm = go.Figure()
         fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='lightcoral')))
@@ -70,7 +53,6 @@ with tab_perf:
 
     st.subheader("Statistical Process Control (SPC) Chart")
     st.caption("Simulated data for a critical process parameter.")
-    
     np.random.seed(42)
     target, ucl, lcl = 10.0, 10.5, 9.5
     spc_data = np.random.normal(loc=target, scale=0.15, size=50)
@@ -83,10 +65,6 @@ with tab_perf:
     fig_spc.update_layout(title="SPC Chart for Critical Parameter", yaxis_title="Measurement (nm)", xaxis_title="Batch Number")
     st.plotly_chart(fig_spc, use_container_width=True, key="spc_chart")
 
-
-# ==============================================================================
-# TAB 2: Forecasting with Prophet (NEW)
-# ==============================================================================
 with tab_forecast:
     st.header("Predictive Quality Forecasting using Prophet")
     st.info("This module uses Meta's Prophet library to forecast key quality metrics 30 days into the future. It helps identify potential issues *before* they occur.", icon="🔮")
@@ -94,28 +72,21 @@ with tab_forecast:
     @st.cache_data
     def run_prophet_forecast(data, metric_col, periods=30):
         prophet_df = data[['Date', metric_col]].rename(columns={'Date': 'ds', metric_col: 'y'})
-        
         m = Prophet(daily_seasonality=False, weekly_seasonality=True, yearly_seasonality=True)
         m.fit(prophet_df)
-        
         future = m.make_future_dataframe(periods=periods)
         forecast = m.predict(future)
         return m, forecast
 
-    metric_to_forecast = st.selectbox("Select metric to forecast:", ["DPPM", "Yield"])
+    metric_to_forecast = st.selectbox("Select metric to forecast:", ["DPPM", "Yield"], key="forecast_metric_select")
     
     with st.spinner(f"Generating 30-day forecast for {metric_to_forecast}..."):
         model, forecast = run_prophet_forecast(supplier_data, metric_to_forecast)
-
         st.subheader("Forecast Plot")
-        # Custom Plotly plot for better interactivity
         fig_forecast = go.Figure()
-        # Forecast line
         fig_forecast.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat'], mode='lines', name='Forecast (yhat)', line=dict(color='navy', dash='dash')))
-        # Uncertainty interval
         fig_forecast.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_upper'], fill=None, mode='lines', line_color='rgba(0,176,246,0.2)', name='Upper Bound'))
         fig_forecast.add_trace(go.Scatter(x=forecast['ds'], y=forecast['yhat_lower'], fill='tonexty', mode='lines', line_color='rgba(0,176,246,0.2)', name='Lower Bound'))
-        # Actual historical data
         fig_forecast.add_trace(go.Scatter(x=model.history['ds'], y=model.history['y'], mode='markers', name='Actuals', marker=dict(color='black', size=4)))
         fig_forecast.update_layout(title=f"Forecast of {metric_to_forecast} for {selected_supplier}", yaxis_title=metric_to_forecast)
         st.plotly_chart(fig_forecast, use_container_width=True, key="prophet_forecast_chart")
@@ -124,26 +95,21 @@ with tab_forecast:
         if metric_to_forecast == 'DPPM':
             threshold = 150
             future_dppm = forecast[forecast['ds'] > pd.Timestamp.now()]
-            if (future_dppm['yhat'] > threshold).any():
+            if not future_dppm.empty and (future_dppm['yhat'] > threshold).any():
                 breach_date = future_dppm[future_dppm['yhat'] > threshold]['ds'].iloc[0]
                 st.error(f"**ALERT:** DPPM is forecast to exceed the {threshold}ppm threshold on **{breach_date.strftime('%Y-%m-%d')}**. Recommend proactive engagement with supplier.", icon="🚨")
             else:
                 st.success(f"**OK:** DPPM is forecast to remain below the {threshold}ppm threshold for the next 30 days.", icon="✅")
         
         st.subheader("Forecast Components")
-        st.caption("Prophet deconstructs the forecast into its underlying components: overall trend, weekly, and yearly patterns. This helps understand the drivers of the forecast.")
+        st.caption("Prophet deconstructs the forecast into its underlying components: overall trend, weekly, and yearly patterns.")
         fig_components = model.plot_components(forecast)
-        st.pyplot(fig_components)
+        st.pyplot(fig_components, key="prophet_components_plot")
 
-
-# ==============================================================================
-# TAB 3: Predictive Lot Disposition (Existing ML functionality)
-# ==============================================================================
 with tab_ml:
     st.header("Predictive Lot Disposition Engine")
     st.info("This ML model predicts the probability of a lot failing final test based on upstream process parameters.", icon="🤖")
 
-    # This section remains the same as the previous version...
     @st.cache_data
     def get_model_and_data():
         np.random.seed(42)
@@ -157,14 +123,13 @@ with tab_ml:
     model, X_desc = get_model_and_data()
     col1, col2 = st.columns([1, 2])
     with col1:
-        # ... sliders and input form ...
-        temp = st.slider("Average Temp (°C)", float(X_desc.loc['min','Temp_Avg']), float(X_desc.loc['max','Temp_Avg']), 152.0, 0.1)
-        pressure = st.slider("Pressure Variance (psi)", float(X_desc.loc['min','Pressure_Var']), float(X_desc.loc['max','Pressure_Var']), 0.8, 0.01)
-        vibration = st.slider("Max Vibration (g)", float(X_desc.loc['min','Vibration_Max']), float(X_desc.loc['max','Vibration_Max']), 0.5, 0.01)
+        st.markdown("##### Input New Lot Parameters:")
+        temp = st.slider("Average Temp (°C)", float(X_desc.loc['min','Temp_Avg']), float(X_desc.loc['max','Temp_Avg']), 152.0, 0.1, key="slider_temp")
+        pressure = st.slider("Pressure Variance (psi)", float(X_desc.loc['min','Pressure_Var']), float(X_desc.loc['max','Pressure_Var']), 0.8, 0.01, key="slider_pressure")
+        vibration = st.slider("Max Vibration (g)", float(X_desc.loc['min','Vibration_Max']), float(X_desc.loc['max','Vibration_Max']), 0.5, 0.01, key="slider_vibration")
         input_data = pd.DataFrame([[temp, pressure, vibration]], columns=['Temp_Avg', 'Pressure_Var', 'Vibration_Max'])
         fail_prob = model.predict_proba(input_data)[0, 1]
     with col2:
-        # ... prediction and feature importance plot ...
         st.markdown("##### Model Prediction & Recommendation:")
         if fail_prob > 0.6: st.error(f"**High Risk ({fail_prob:.0%})** - Recommend placing lot on hold for engineering review.", icon="🚨")
         elif fail_prob > 0.3: st.warning(f"**Medium Risk ({fail_prob:.0%})** - Recommend enhanced inspection (100% AQL).", icon="⚠️")
@@ -176,20 +141,13 @@ with tab_ml:
         fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
         st.plotly_chart(fig_imp, use_container_width=True, key="importance_chart")
 
-
-# ==============================================================================
-# TAB 4: Automated Reporting (NEW)
-# ==============================================================================
 with tab_report:
     st.header("Automated Supplier Quality Report")
-    st.info("Generate a standardized PowerPoint (PPTX) report for this supplier, including key metrics and performance charts. This is ideal for weekly quality reviews or sharing with stakeholders.", icon="📄")
+    st.info("Generate a standardized PowerPoint (PPTX) report for this supplier, including key metrics and performance charts.", icon="📄")
 
     if st.button("Generate PowerPoint Report"):
         with st.spinner("Creating report... This may take a moment."):
-            # Create a presentation object
             prs = Presentation()
-            
-            # Slide 1: Title
             title_slide_layout = prs.slide_layouts[0]
             slide = prs.slides.add_slide(title_slide_layout)
             title = slide.shapes.title
@@ -197,20 +155,16 @@ with tab_report:
             title.text = f"Supplier Quality Review: {selected_supplier}"
             subtitle.text = f"Report Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d')}"
 
-            # Slide 2: Performance Charts
             content_slide_layout = prs.slide_layouts[5]
             slide = prs.slides.add_slide(content_slide_layout)
             slide.shapes.title.text = "Key Performance Trends"
             
-            # Export Yield Chart using Kaleido
             yield_img_bytes = fig_yield.to_image(format="png", engine="kaleido", width=800, height=400)
             slide.shapes.add_picture(io.BytesIO(yield_img_bytes), Inches(0.5), Inches(1.5), width=Inches(4.5))
             
-            # Export DPPM Chart using Kaleido
             dppm_img_bytes = fig_dppm.to_image(format="png", engine="kaleido", width=800, height=400)
             slide.shapes.add_picture(io.BytesIO(dppm_img_bytes), Inches(5.0), Inches(1.5), width=Inches(4.5))
 
-            # Slide 3: Open Issues
             slide = prs.slides.add_slide(content_slide_layout)
             slide.shapes.title.text = "Open Action Items (SCARs/Failures)"
             textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5))
@@ -227,7 +181,6 @@ with tab_report:
                 p = text_frame.add_paragraph()
                 p.text = "No open failures reported for this supplier."
 
-            # Save to a bytes buffer
             ppt_buffer = io.BytesIO()
             prs.save(ppt_buffer)
             ppt_buffer.seek(0)
