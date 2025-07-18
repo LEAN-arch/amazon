@@ -1,62 +1,166 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+# --- PAGE CONFIGURATION & ROBUST STATE CHECK ---
 st.set_page_config(layout="wide", page_title="Failure Analysis Hub", page_icon="🔧")
 
-# --- ROBUST STATE CHECK ---
 if 'app_data' not in st.session_state:
     st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
     st.stop()
 
+# Unpack data from the central state dictionary
 failures = st.session_state['app_data']['failures']
 suppliers = st.session_state['app_data']['suppliers']
 
 # --- UI RENDER ---
-st.markdown("# 🔧 Failure Analysis (FRACAS) Hub")
-st.markdown("A central system for Failure Reporting, Analysis, and Corrective Action. This is the core of our closed-loop quality system.")
+st.markdown("# 🔧 Failure Analysis & Root Cause System (FRACAS)")
+st.markdown("This hub is the engine for our closed-loop quality system, integrating statistical analysis, root cause drill-down, and traceability to drive continuous improvement in line with **ISO 9001/AS9100** corrective action principles.")
 
-st.subheader("Failure Trends Over Time")
+# ==============================================================================
+# 1. ENHANCEMENT: Statistical Process Control (SPC) Chart
+# ==============================================================================
+st.subheader("1. Failure Rate Statistical Process Control (p-Chart)")
 st.markdown("""
-- **What:** An area chart showing the number of reported failures per month, broken down by failure mode.
-- **How:** The failure data is grouped by month and failure type, then plotted over time.
-- **Why (Actionability):** This chart helps identify systemic issues. A sudden spike in a specific failure mode (e.g., 'Wire Bond Lift') points to a recent process change or excursion that needs immediate investigation. Conversely, a decreasing trend after a corrective action visually confirms its effectiveness.
+- **What:** A p-Chart monitoring the proportion of defective ASIC units over time, plotted against statistically calculated Upper and Lower Control Limits (UCL/LCL).
+- **How:** It uses data from incoming inspection lots (simulated). For each lot, we calculate `p = (number of defects) / (lot size)`. The control limits are calculated as `p_avg ± 3 * σ`, where σ is the standard deviation of the proportion.
+- **Why (Actionability):** This is a direct implementation of the JD's requirement for **"early detection of process excursions."** A point outside the red control limits is a statistically significant signal (a "special cause") that the process has changed. This is an unambiguous, data-driven trigger to **launch an 8D investigation** and is a core tool for any Six Sigma practitioner or CQE.
 """)
-failures['Month'] = failures['Date_Reported'].dt.to_period('M').astype(str)
-trend_data = failures.groupby(['Month', 'Failure_Mode']).size().reset_index(name='Count')
-fig_trend = px.area(trend_data, x='Month', y='Count', color='Failure_Mode', title="Monthly Failure Reports by Type")
-st.plotly_chart(fig_trend, use_container_width=True, key="failure_trend_chart")
+
+@st.cache_data
+def generate_spc_data():
+    np.random.seed(42)
+    lots = pd.DataFrame({
+        'lot_id': [f"L-{100+i}" for i in range(25)],
+        'inspection_date': pd.to_datetime(pd.date_range(start='2023-08-01', periods=25)),
+        'lot_size': np.random.randint(1000, 1500, size=25),
+    })
+    # Simulate a baseline defect rate and add special cause variations
+    base_defects = np.random.randint(5, 15, size=25)
+    base_defects[10] = 35 # Special Cause 1
+    base_defects[21] = 42 # Special Cause 2
+    lots['defects'] = base_defects
+    lots['p'] = lots['defects'] / lots['lot_size']
+    return lots
+
+spc_df = generate_spc_data()
+p_bar = spc_df['defects'].sum() / spc_df['lot_size'].sum()
+n_bar = spc_df['lot_size'].mean()
+ucl = p_bar + 3 * np.sqrt((p_bar * (1 - p_bar)) / n_bar)
+lcl = max(0, p_bar - 3 * np.sqrt((p_bar * (1 - p_bar)) / n_bar))
+spc_df['ooc'] = (spc_df['p'] > ucl) | (spc_df['p'] < lcl)
+
+fig_spc = go.Figure()
+fig_spc.add_trace(go.Scatter(x=spc_df['inspection_date'], y=spc_df['p'], mode='lines+markers', name='Proportion Defective'))
+fig_spc.add_trace(go.Scatter(
+    x=spc_df[spc_df['ooc']]['inspection_date'], y=spc_df[spc_df['ooc']]['p'],
+    mode='markers', name='Out of Control', marker=dict(color='red', size=12, symbol='x')
+))
+fig_spc.add_hline(y=p_bar, line=dict(dash="dash", color="green"), name="Center Line (Avg)")
+fig_spc.add_hline(y=ucl, line=dict(dash="dot", color="red"), name="UCL")
+fig_spc.add_hline(y=lcl, line=dict(dash="dot", color="red"), name="LCL")
+fig_spc.update_layout(
+    title="p-Chart for Incoming ASIC Defect Rate", yaxis_title="Proportion Defective", yaxis_tickformat=".2%",
+    xaxis_title="Inspection Date", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+st.plotly_chart(fig_spc, use_container_width=True, key="p_chart_failures")
 
 st.divider()
 
-tab1, tab2, tab3 = st.tabs(["Open Failures", "Launch New 8D/DMAIC", "Closed-Loop Mechanism Visualizer"])
+# --- RESTRUCTURED TABS FOR ENHANCED WORKFLOW ---
+tab_rca, tab_8d, tab_cl = st.tabs(["2. Root Cause Analysis (RCA) Drill-Down", "3. 8D Investigation & Traceability", "Closed-Loop Visualizer"])
 
-with tab1:
-    st.subheader("Active Failure Investigations")
-    st.markdown("- **What:** A filterable table of all quality issues that are not yet 'Closed'. \n- **Why:** This is the SQE's daily work queue, showing all problems that require active management.")
-    open_failures = failures[failures['Status'] != 'Closed']
-    st.dataframe(open_failures, use_container_width=True)
 
-with tab2:
-    st.subheader("Initiate Structured Problem Solving (8D)")
-    st.info("The 8D process ensures a thorough and documented approach to root cause analysis and corrective action.")
-    with st.form("8d_form"):
-        st.text_input("Part Number", "KU-ASIC-COM-001")
-        st.selectbox("Supplier", suppliers['Supplier'].unique())
-        st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #KUI-7891 showed lifted wire bonds on Pad 14.")
-        st.text_area("Interim Containment Action (D3)", "Placed Lot #KUI-7891 on hold. Screened all remaining units from the wafer lot. Segregated suspect units.")
-        st.multiselect("Team Members (D1)", ["J. Doe (SQE)", "S. Smith (Design)", "R. Chen (Supplier Quality)"])
-        submitted = st.form_submit_button("Launch Investigation")
+# ==============================================================================
+# 2. ENHANCEMENT: Interactive Root Cause Analysis (RCA) Drill-Down
+# ==============================================================================
+with tab_rca:
+    st.subheader("2. Interactive Root Cause Analysis Dashboard")
+    st.markdown("""
+    - **What:** A Sunburst chart providing a hierarchical view of our quality issues, from the symptom (Failure Mode) down to the diagnosed underlying cause (Root Cause).
+    - **How:** Data is aggregated from completed 8D investigations. The chart visualizes the parent-child relationship between failure modes and their contributing root causes.
+    - **Why (Actionability):** This powerful visual moves beyond just counting failures to analyzing their systemic origins, a principle central to **IATF 16949** and effective quality management. It allows us to focus corrective actions on the biggest drivers. For example, we can see that 'Wire Bond Lift' is primarily caused by 'Incorrect Bonding Parameter', pointing to a need for better supplier training or specification control, potentially referencing **JEDEC** or **IPC** standards for wire bonding.
+    """)
+
+    @st.cache_data
+    def get_rca_data():
+        return pd.DataFrame([
+            {'Failure_ID': 'FA-003', 'Failure_Mode': 'Package Crack', 'Root_Cause': 'Incorrect Mold Temp'},
+            {'Failure_ID': 'FA-004', 'Failure_Mode': 'ESD Damage', 'Root_Cause': 'Improper Grounding'},
+            {'Failure_ID': 'FA-006', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'},
+            {'Failure_ID': 'FA-007', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Pad Contamination'},
+            {'Failure_ID': 'FA-008', 'Failure_Mode': 'Package Crack', 'Root_Cause': 'Incorrect Mold Temp'},
+            {'Failure_ID': 'FA-009', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'},
+            {'Failure_ID': 'FA-010', 'Failure_Mode': 'ESD Damage', 'Root_Cause': 'Improper Grounding'},
+            {'Failure_ID': 'FA-011', 'Failure_Mode': 'Gate Oxide Leakage', 'Root_Cause': 'Fab Process Excursion'},
+            {'Failure_ID': 'FA-012', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'},
+        ])
+    rca_df = get_rca_data()
+    
+    fig_sunburst = px.sunburst(
+        rca_df,
+        path=['Failure_Mode', 'Root_Cause'],
+        title="Interactive RCA Drill-Down of Closed Investigations",
+        height=600
+    )
+    st.plotly_chart(fig_sunburst, use_container_width=True, key="sunburst_rca")
+    st.info("Click on a segment in the inner ring to drill down into its root causes.", icon="💡")
+
+
+# ==============================================================================
+# 3. ENHANCEMENT: Integrated Device Traceability in 8D Workflow
+# ==============================================================================
+with tab_8d:
+    st.subheader("3. 8D Investigation Workflow with Device Traceability")
+    st.markdown("""
+    - **What:** An enhanced 8D form that includes a Lot ID field to demonstrate device traceability.
+    - **How:** When a Lot ID is entered, the system simulates a lookup for associated production data.
+    - **Why (Actionability):** This directly demonstrates the JD's requirement to be a **"subject matter expert in device traceability."** Failures are not isolated events. By linking a failure back to its specific production lot and process data (as mandated by standards like **IPC-1782** for traceability), the root cause investigation is accelerated, providing immediate context to the 8D team.
+    """)
+
+    col1, col2 = st.columns([1, 1.5])
+    with col1:
+        with st.form("8d_form_enhanced"):
+            st.text_input("Part Number", "KU-ASIC-COM-001")
+            st.selectbox("Supplier", suppliers['Supplier'].unique())
+            st.text_input("Wafer / Assembly Lot ID", "A-LOT-7891", help="Enter a Lot ID to retrieve historical process data.")
+            st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #A-LOT-7891 showed lifted wire bonds on Pad 14.")
+            st.multiselect("Team Members (D1)", ["J. Doe (SQE)", "S. Smith (Design)", "R. Chen (Supplier Quality)"])
+            submitted = st.form_submit_button("Launch Investigation & Trace Lot")
+
+    with col2:
+        st.markdown("##### Traceability & Process Context")
+        st.caption("Data associated with the entered Lot ID appears here.")
+        
+        # Simulate the traceability lookup
         if submitted:
-            st.success("New Failure Analysis FA-006 has been created and assigned.")
+            with st.container(border=True):
+                st.success(f"**Traceability Data Found for Lot A-LOT-7891:**")
+                st.metric("Final Test Yield for this Lot", "97.3%", delta="-2.2% vs. Avg", delta_color="inverse")
+                st.markdown("**Associated Process Control Data:**")
+                
+                # Simulate the SPC chart for this specific lot's production window
+                np.random.seed(10)
+                sim_spc_data = np.random.normal(loc=150, scale=0.5, size=10)
+                sim_spc_data[7:9] += 1.5 # Simulate excursion during this lot's run
+                
+                fig_lot_spc = go.Figure()
+                fig_lot_spc.add_trace(go.Scatter(y=sim_spc_data, mode='lines+markers', name='Bonding Temp'))
+                fig_lot_spc.add_hline(y=151, line=dict(dash="dot", color="red"), name="UCL")
+                fig_lot_spc.update_layout(height=200, title="Wire Bonder Temp (°C) during Lot Run", margin=dict(t=30, b=10))
+                st.plotly_chart(fig_lot_spc, use_container_width=True, key="lot_spc_trace")
+                st.warning("**Insight:** A temperature excursion was detected during this lot's production run, providing a strong potential root cause for the wire bond failures.")
 
-with tab3:
-    st.subheader("Visualizing the Closed-Loop Mechanism")
+# ==============================================================================
+# Existing Closed-Loop Visualizer
+# ==============================================================================
+with tab_cl:
+    st.subheader("Closed-Loop Mechanism Visualizer")
     st.markdown("""
     - **What:** A Sankey diagram illustrating the ideal flow of information in our quality system.
-    - **How:** It shows hypothetical volumes of data flowing between stages.
-    - **Why (Actionability):** This chart is a powerful communication tool. It visually explains the goal of an integrated quality system: a problem detected at an OSAT (left) should trigger a failure analysis, which identifies a root cause at the foundry, leading to a corrective action (CAPA) that ultimately results in improved yield (right). It demonstrates a strategic understanding of quality systems.
+    - **Why (Actionability):** This chart is a powerful communication tool. It visually explains the strategic goal of an integrated quality system: a problem detected at an OSAT (left) should trigger a failure analysis, which identifies a root cause at the foundry, leading to a corrective action (CAPA) that ultimately results in improved yield (right).
     """)
     fig_sankey = go.Figure(data=[go.Sankey(
         node=dict(
