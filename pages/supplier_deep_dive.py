@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px  # <-- THIS LINE WAS MISSING
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
@@ -69,7 +70,6 @@ with tab3:
     st.subheader("Predictive Lot Disposition Engine")
     st.info("This ML model predicts the probability of a lot failing final test based on upstream process parameters. This allows for targeted, risk-based inspection rather than random sampling.", icon="🤖")
 
-    # --- SIMULATE TRAINING DATA AND A MODEL ---
     @st.cache_data
     def get_model_and_data():
         np.random.seed(42)
@@ -78,11 +78,8 @@ with tab3:
             'Pressure_Var': np.random.gamma(1, 0.5, 200),
             'Vibration_Max': np.random.uniform(0.1, 1.0, 200)
         })
-        # Create a relationship for failure
         y = ((X['Temp_Avg'] > 155) | (X['Pressure_Var'] > 1.2) | (X['Vibration_Max'] > 0.8)).astype(int)
-        y = y & (np.random.rand(200) < 0.7) # Add some noise
-        
-        # Train a simple model
+        y = y & (np.random.rand(200) < 0.7)
         model = RandomForestClassifier(n_estimators=50, random_state=42)
         model.fit(X, y)
         return model, X.describe()
@@ -96,7 +93,6 @@ with tab3:
         pressure = st.slider("Pressure Variance (psi)", float(X_desc.loc['min','Pressure_Var']), float(X_desc.loc['max','Pressure_Var']), 0.8, 0.01)
         vibration = st.slider("Max Vibration (g)", float(X_desc.loc['min','Vibration_Max']), float(X_desc.loc['max','Vibration_Max']), 0.5, 0.01)
         
-        # Predict
         input_data = pd.DataFrame([[temp, pressure, vibration]], columns=['Temp_Avg', 'Pressure_Var', 'Vibration_Max'])
         fail_prob = model.predict_proba(input_data)[0, 1]
 
@@ -114,6 +110,10 @@ with tab3:
         st.markdown("##### What's Driving This Prediction?")
         st.caption("Feature importance shows which parameters the model considers most predictive of failure. This helps focus engineering efforts.")
         
+        importances = model.feature_importances_
+        feature_names = input_data.columns
+        fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
+        st.plotly_chart(fig_imp, use_container_width=True)
         importances = model.feature_importances_
         feature_names = input_data.columns
         fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
