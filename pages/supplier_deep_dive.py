@@ -2,14 +2,15 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import plotly.express as px  # <-- THIS LINE WAS MISSING
+import plotly.express as px
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 
 st.set_page_config(layout="wide", page_title="Supplier Deep Dive", page_icon="🔬")
 
+# This check is crucial for stability.
 if 'data_loaded' not in st.session_state:
-    st.error("Data not loaded. Please go to the main page first.")
+    st.error("Data not loaded. Please return to the 'Kuiper_Command_Center' home page to initialize the application.")
     st.stop()
 
 suppliers = st.session_state['suppliers']
@@ -18,7 +19,11 @@ perf_df = st.session_state['performance_data']
 st.markdown("# 🔬 Supplier Deep Dive")
 st.markdown("Analyze individual supplier performance, review process control data, and leverage ML for predictive quality.")
 
-selected_supplier = st.selectbox("Select a Supplier to Analyze", suppliers['Supplier'].unique())
+selected_supplier = st.selectbox(
+    "Select a Supplier to Analyze",
+    suppliers['Supplier'].unique(),
+    key="supplier_select_deep_dive" # Adding a key to the selectbox for good measure
+)
 supplier_data = perf_df[perf_df['Supplier'] == selected_supplier].copy()
 supplier_info = suppliers[suppliers['Supplier'] == selected_supplier].iloc[0]
 
@@ -36,7 +41,8 @@ with tab1:
         fig_yield.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['Yield'], mode='lines', name='Daily Yield', line=dict(color='lightblue')))
         fig_yield.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['Yield_MA'], mode='lines', name='14-Day Moving Avg', line=dict(color='blue', width=3)))
         fig_yield.update_layout(title="Yield Trend with Moving Average", yaxis_title="Yield (%)", yaxis_tickformat=".2%")
-        st.plotly_chart(fig_yield, use_container_width=True)
+        # ADDED UNIQUE KEY
+        st.plotly_chart(fig_yield, use_container_width=True, key="yield_chart")
         st.caption("The moving average helps identify underlying trends by smoothing out daily noise.")
 
     with col2:
@@ -44,7 +50,8 @@ with tab1:
         fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='lightcoral')))
         fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM_MA'], mode='lines', name='14-Day Moving Avg', line=dict(color='red', width=3)))
         fig_dppm.update_layout(title="DPPM Trend with Moving Average", yaxis_title="Defects Per Million (DPPM)")
-        st.plotly_chart(fig_dppm, use_container_width=True)
+        # ADDED UNIQUE KEY
+        st.plotly_chart(fig_dppm, use_container_width=True, key="dppm_chart")
         st.caption("A rising DPPM trend is a key indicator of degrading quality and requires investigation.")
 
 with tab2:
@@ -64,7 +71,8 @@ with tab2:
     fig_spc.add_hline(y=lcl, line=dict(dash="dot", color="red"), name="LCL")
     fig_spc.add_trace(go.Scatter(x=ooc_points, y=spc_data[ooc_points], mode='markers', marker=dict(color='red', size=10, symbol='x'), name='Out of Control'))
     fig_spc.update_layout(title="SPC Chart for Critical Parameter", yaxis_title="Measurement (nm)", xaxis_title="Batch Number")
-    st.plotly_chart(fig_spc, use_container_width=True)
+    # ADDED UNIQUE KEY
+    st.plotly_chart(fig_spc, use_container_width=True, key="spc_chart")
 
 with tab3:
     st.subheader("Predictive Lot Disposition Engine")
@@ -113,8 +121,5 @@ with tab3:
         importances = model.feature_importances_
         feature_names = input_data.columns
         fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
-        st.plotly_chart(fig_imp, use_container_width=True)
-        importances = model.feature_importances_
-        feature_names = input_data.columns
-        fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
-        st.plotly_chart(fig_imp, use_container_width=True)
+        # ADDED UNIQUE KEY
+        st.plotly_chart(fig_imp, use_container_width=True, key="importance_chart")
