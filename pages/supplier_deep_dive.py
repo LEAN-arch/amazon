@@ -16,7 +16,6 @@ if 'app_data' not in st.session_state:
     st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
     st.stop()
 
-# Unpack data from the session state dictionary
 app_data = st.session_state['app_data']
 suppliers = app_data['suppliers']
 perf_df = app_data['performance_data']
@@ -34,17 +33,23 @@ tab_perf, tab_forecast, tab_ml, tab_report = st.tabs(["Performance & SPC", "📈
 
 with tab_perf:
     st.header(f"Historical Performance for: {selected_supplier}")
+    st.markdown("- **What:** Charts showing historical Yield and DPPM trends, plus a Statistical Process Control (SPC) chart for a critical parameter. \n- **Why:** To understand past performance and stability.")
+    
     supplier_data['Yield_MA'] = supplier_data['Yield'].rolling(window=14).mean()
     supplier_data['DPPM_MA'] = supplier_data['DPPM'].rolling(window=14).mean()
 
     col1, col2 = st.columns(2)
     with col1:
+        st.markdown("##### Yield Trend")
+        st.caption("The blue line (14-Day Moving Avg) smooths out daily fluctuations, making the underlying performance trend easier to identify.")
         fig_yield = go.Figure()
         fig_yield.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['Yield'], mode='lines', name='Daily Yield', line=dict(color='lightblue')))
         fig_yield.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['Yield_MA'], mode='lines', name='14-Day Moving Avg', line=dict(color='blue', width=3)))
         fig_yield.update_layout(title="Yield Trend with Moving Average", yaxis_title="Yield (%)", yaxis_tickformat=".2%")
         st.plotly_chart(fig_yield, use_container_width=True, key="yield_chart")
     with col2:
+        st.markdown("##### DPPM Trend")
+        st.caption("A rising DPPM (Defects Per Million) trend is a key indicator of degrading quality and requires investigation.")
         fig_dppm = go.Figure()
         fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='lightcoral')))
         fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM_MA'], mode='lines', name='14-Day Moving Avg', line=dict(color='red', width=3)))
@@ -52,11 +57,11 @@ with tab_perf:
         st.plotly_chart(fig_dppm, use_container_width=True, key="dppm_chart")
 
     st.subheader("Statistical Process Control (SPC) Chart")
-    st.caption("Simulated data for a critical process parameter.")
+    st.caption("This chart helps detect process drift *before* it results in defects. Any points outside the red control limits (UCL/LCL) represent a statistically significant deviation that must be investigated.")
     np.random.seed(42)
     target, ucl, lcl = 10.0, 10.5, 9.5
     spc_data = np.random.normal(loc=target, scale=0.15, size=50)
-    spc_data[30:35] += 0.6  # Excursion
+    spc_data[30:35] += 0.6
     fig_spc = go.Figure()
     fig_spc.add_trace(go.Scatter(y=spc_data, mode='lines+markers', name='Measurement'))
     fig_spc.add_hline(y=target, line=dict(dash="dash", color="green"), name="Target")
@@ -67,7 +72,11 @@ with tab_perf:
 
 with tab_forecast:
     st.header("Predictive Quality Forecasting using Prophet")
-    st.info("This module uses Meta's Prophet library to forecast key quality metrics 30 days into the future. It helps identify potential issues *before* they occur.", icon="🔮")
+    st.markdown("""
+    - **What:** A 30-day forecast of a key quality metric (DPPM or Yield). The dark blue line is the model's prediction, and the light blue area is the uncertainty interval.
+    - **How:** It uses Meta's Prophet time-series library, which automatically models trends and seasonality from the supplier's historical performance data.
+    - **Why (Actionability):** This moves us from reactive to **proactive** quality management. Instead of waiting for a quality excursion to happen, we can see it coming. The model provides an alert if a metric is forecast to cross a critical threshold, enabling preventive action.
+    """)
 
     @st.cache_data
     def run_prophet_forecast(data, metric_col, periods=30):
@@ -102,15 +111,17 @@ with tab_forecast:
                 st.success(f"**OK:** DPPM is forecast to remain below the {threshold}ppm threshold for the next 30 days.", icon="✅")
         
         st.subheader("Forecast Components")
-        st.caption("Prophet deconstructs the forecast into its underlying components: overall trend, weekly, and yearly patterns.")
+        st.caption("This chart helps answer *why* the forecast is what it is. A rising 'trend' component is a serious long-term concern, while a 'yearly' dip might be an expected seasonal effect that requires no action.")
         fig_components = model.plot_components(forecast)
-        
-        # THIS IS THE CORRECTED LINE: The 'key' argument has been removed.
         st.pyplot(fig_components)
 
 with tab_ml:
     st.header("Predictive Lot Disposition Engine")
-    st.info("This ML model predicts the probability of a lot failing final test based on upstream process parameters.", icon="🤖")
+    st.markdown("""
+    - **What:** An interactive ML model that predicts the probability of a production lot failing final test.
+    - **How:** A Random Forest Classifier was trained on historical data linking upstream process parameters (like temperature) to downstream test outcomes (pass/fail).
+    - **Why (Actionability):** This enables risk-based inspection. Instead of testing a random sample from every lot, we can use this model to focus intense scrutiny only on the high-risk lots, saving time and resources while improving quality assurance.
+    """)
 
     @st.cache_data
     def get_model_and_data():
@@ -118,8 +129,7 @@ with tab_ml:
         X = pd.DataFrame({'Temp_Avg': np.random.normal(150, 5, 200), 'Pressure_Var': np.random.gamma(1, 0.5, 200), 'Vibration_Max': np.random.uniform(0.1, 1.0, 200)})
         y = ((X['Temp_Avg'] > 155) | (X['Pressure_Var'] > 1.2) | (X['Vibration_Max'] > 0.8)).astype(int)
         y = y & (np.random.rand(200) < 0.7)
-        model = RandomForestClassifier(n_estimators=50, random_state=42)
-        model.fit(X, y)
+        model = RandomForestClassifier(n_estimators=50, random_state=42); model.fit(X, y)
         return model, X.describe()
 
     model, X_desc = get_model_and_data()
@@ -137,23 +147,26 @@ with tab_ml:
         elif fail_prob > 0.3: st.warning(f"**Medium Risk ({fail_prob:.0%})** - Recommend enhanced inspection (100% AQL).", icon="⚠️")
         else: st.success(f"**Low Risk ({fail_prob:.0%})** - Recommend standard release protocol.", icon="✅")
         st.progress(fail_prob)
-        st.markdown("##### What's Driving This Prediction?")
-        importances = model.feature_importances_
-        feature_names = input_data.columns
+        st.markdown("##### What's Driving This Prediction? (Feature Importance)")
+        st.caption("This chart explains *which* parameter the model is weighing most heavily. If 'Temp_Avg' is the top driver, it tells the engineering team to focus their process control efforts on temperature stability.")
+        importances = model.feature_importances_; feature_names = input_data.columns
         fig_imp = px.bar(x=importances, y=feature_names, orientation='h', labels={'x':'Importance', 'y':''}, title="Model Feature Importance")
         st.plotly_chart(fig_imp, use_container_width=True, key="importance_chart")
 
 with tab_report:
     st.header("Automated Supplier Quality Report")
-    st.info("Generate a standardized PowerPoint (PPTX) report for this supplier, including key metrics and performance charts.", icon="📄")
+    st.markdown("""
+    - **What:** A one-click tool to generate a standardized PowerPoint (PPTX) report.
+    - **How:** It uses the `python-pptx` library to create a new presentation and the `kaleido` library to save the live Plotly charts as static images and embed them.
+    - **Why (Actionability):** This automates a common, time-consuming task for any SQE. It ensures consistent, data-backed communication for weekly quality reviews, supplier business reviews, or sharing with management, saving hours of manual work.
+    """)
 
     if st.button("Generate PowerPoint Report"):
         with st.spinner("Creating report... This may take a moment."):
             prs = Presentation()
             title_slide_layout = prs.slide_layouts[0]
             slide = prs.slides.add_slide(title_slide_layout)
-            title = slide.shapes.title
-            subtitle = slide.placeholders[1]
+            title = slide.shapes.title; subtitle = slide.placeholders[1]
             title.text = f"Supplier Quality Review: {selected_supplier}"
             subtitle.text = f"Report Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d')}"
 
@@ -170,8 +183,7 @@ with tab_report:
             slide = prs.slides.add_slide(content_slide_layout)
             slide.shapes.title.text = "Open Action Items (SCARs/Failures)"
             textbox = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5))
-            text_frame = textbox.text_frame
-            text_frame.word_wrap = True
+            text_frame = textbox.text_frame; text_frame.word_wrap = True
             
             supplier_failures = failures[failures['Supplier'] == selected_supplier]
             if not supplier_failures.empty:
@@ -180,17 +192,13 @@ with tab_report:
                     p.text = f"ID: {row['Failure_ID']} ({row['Status']}) - Part: {row['Part_Number']}, Mode: {row['Failure_Mode']}"
                     p.level = 0
             else:
-                p = text_frame.add_paragraph()
-                p.text = "No open failures reported for this supplier."
+                p = text_frame.add_paragraph(); p.text = "No open failures reported for this supplier."
 
-            ppt_buffer = io.BytesIO()
-            prs.save(ppt_buffer)
-            ppt_buffer.seek(0)
+            ppt_buffer = io.BytesIO(); prs.save(ppt_buffer); ppt_buffer.seek(0)
             
             st.success("Report generated successfully!")
             st.download_button(
-                label="Download PowerPoint Report",
-                data=ppt_buffer,
+                label="Download PowerPoint Report", data=ppt_buffer,
                 file_name=f"SQE_Report_{selected_supplier.replace(' ', '_')}_{pd.Timestamp.now().strftime('%Y%m%d')}.pptx",
                 mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
             )
