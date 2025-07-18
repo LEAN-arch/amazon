@@ -9,6 +9,10 @@ from prophet import Prophet
 from pptx import Presentation
 from pptx.util import Inches
 import io
+import warnings
+
+# --- SUPPRESS DEPRECATION WARNINGS FOR CLEANER PRESENTATION ---
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # --- ROBUST STATE CHECK ---
 if 'app_data' not in st.session_state:
@@ -102,7 +106,7 @@ with tab_act:
             txBox3 = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(4), Inches(1)); tf3 = txBox3.text_frame; tf3.text = "Requirement Reference:"; tf3.paragraphs[0].font.bold = True
             txBox4 = slide.shapes.add_textbox(Inches(0.5), Inches(5.2), Inches(4), Inches(1)); tf4 = txBox4.text_frame; tf4.text = standard_ref
             fig_dppm = go.Figure(); fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='red'))); fig_dppm.update_layout(title="DPPM Trend for Reference", yaxis_title="DPPM")
-            dppm_img_bytes = fig_dppm.to_image(format="png", engine="kaleido", width=800, height=450); slide.shapes.add_picture(io.BytesIO(dppm_img_bytes), Inches(4.7), Inches(1.7), width=Inches(5))
+            dppm_img_bytes = fig_dppm.to_image(format="png", width=800, height=450); slide.shapes.add_picture(io.BytesIO(dppm_img_bytes), Inches(4.7), Inches(1.7), width=Inches(5))
             slide = prs.slides.add_slide(prs.slide_layouts[5]); slide.shapes.title.text = "Action Required from Supplier"
             txBox_action = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5)); tf_action = txBox_action.text_frame; tf_action.text = "Please provide the following within 14 calendar days:\n\n"
             p1 = tf_action.add_paragraph(); p1.text = "1. Interim Containment Action."; p1.level = 1; p2 = tf_action.add_paragraph(); p2.text = "2. Completed 8D Root Cause Analysis."; p2.level = 1; p3 = tf_action.add_paragraph(); p3.text = "3. Proposed Corrective and Preventive Actions."; p3.level = 1; p4 = tf_action.add_paragraph(); p4.text = "4. Plan for implementation and validation of actions."; p4.level = 1
