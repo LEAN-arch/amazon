@@ -7,15 +7,13 @@ import plotly.figure_factory as ff
 from sklearn.ensemble import RandomForestClassifier
 from prophet import Prophet
 from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.text import PP_ALIGN
+from pptx.util import Inches
 import io
 
-# --- PAGE CONFIGURATION & ROBUST STATE CHECK ---
-st.set_page_config(layout="wide", page_title="Supplier Deep Dive", page_icon="🔬")
-
+# --- ROBUST STATE CHECK ---
+# No st.set_page_config() in sub-pages.
 if 'app_data' not in st.session_state:
-    st.error("Application data not loaded. Please go to the 'Global Command Center' home page to initialize the app.")
+    st.error("Application data not loaded. Please return to the 'Global Command Center' home page to initialize the app.")
     st.stop()
 
 # Unpack data from the central state dictionary
@@ -54,7 +52,8 @@ with tab_monitor:
         - **Why:** It answers the question: "Is the process stable and predictable?" Any point outside the red control limits indicates a 'special cause' variation that must be investigated immediately. This is fundamental to **AS9100 clause 8.5.1.3** (Production process verification).
         """)
         np.random.seed(42)
-        spc_data = np.random.normal(loc=10.0, scale=0.15, size=50); spc_data[30:35] += 0.6
+        spc_data = np.random.normal(loc=10.0, scale=0.15, size=50)
+        spc_data[30:35] += 0.6
         fig_spc = go.Figure()
         fig_spc.add_trace(go.Scatter(y=spc_data, mode='lines+markers', name='Measurement'))
         fig_spc.add_hline(y=10.0, line=dict(dash="dash", color="green"), name="Target")
@@ -131,17 +130,15 @@ with tab_predict:
         y = ((X['Temp_Avg'] > 155) | (X['Pressure_Var'] > 1.2) | (X['Vibration_Max'] > 0.8)).astype(int); y = y & (np.random.rand(200) < 0.7)
         model = RandomForestClassifier(n_estimators=50, random_state=42).fit(X, y)
         return model, X.describe()
-    model, X_desc = get_model_and_data()
+    model_rf, X_desc = get_model_and_data()
     col1, col2 = st.columns([1, 2])
     with col1:
-        # Input form
         temp = st.slider("Average Temp (°C)", float(X_desc.loc['min','Temp_Avg']), float(X_desc.loc['max','Temp_Avg']), 152.0, 0.1, key="slider_temp")
         pressure = st.slider("Pressure Variance (psi)", float(X_desc.loc['min','Pressure_Var']), float(X_desc.loc['max','Pressure_Var']), 0.8, 0.01, key="slider_pressure")
         vibration = st.slider("Max Vibration (g)", float(X_desc.loc['min','Vibration_Max']), float(X_desc.loc['max','Vibration_Max']), 0.5, 0.01, key="slider_vibration")
     with col2:
-        # Prediction
         input_data = pd.DataFrame([[temp, pressure, vibration]], columns=['Temp_Avg', 'Pressure_Var', 'Vibration_Max'])
-        fail_prob = model.predict_proba(input_data)[0, 1]
+        fail_prob = model_rf.predict_proba(input_data)[0, 1]
         if fail_prob > 0.6: st.error(f"**High Risk ({fail_prob:.0%})** - Recommend placing lot on hold for engineering review.", icon="🚨")
         elif fail_prob > 0.3: st.warning(f"**Medium Risk ({fail_prob:.0%})** - Recommend enhanced inspection (per **ANSI Z1.4**).", icon="⚠️")
         else: st.success(f"**Low Risk ({fail_prob:.0%})** - Recommend standard release protocol.", icon="✅")
@@ -184,42 +181,33 @@ with tab_act:
     if st.button("Generate SCAR PowerPoint"):
         with st.spinner("Creating SCAR..."):
             prs = Presentation()
-            # Title Slide
             slide = prs.slides.add_slide(prs.slide_layouts[0])
             slide.shapes.title.text = "Supplier Corrective Action Request (SCAR)"
             slide.placeholders[1].text = f"To: {selected_supplier}\nSCAR ID: KUI-SCAR-2023-017"
             
-            # Content Slide
             slide = prs.slides.add_slide(prs.slide_layouts[5])
             slide.shapes.title.text = "SCAR Details & Objective Evidence"
             
-            # Add text boxes with details
-            txBox = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(4), Inches(1))
-            tf = txBox.text_frame; tf.text = "Non-Conformance Description:"; tf.paragraphs[0].font.bold = True
-            txBox2 = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), Inches(4), Inches(2))
-            tf2 = txBox2.text_frame; tf2.text = non_conformance_details
+            txBox = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(4), Inches(1)); tf = txBox.text_frame; tf.text = "Non-Conformance Description:"; tf.paragraphs[0].font.bold = True
+            txBox2 = slide.shapes.add_textbox(Inches(0.5), Inches(2.2), Inches(4), Inches(2)); tf2 = txBox2.text_frame; tf2.text = non_conformance_details
             
-            txBox3 = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(4), Inches(1))
-            tf3 = txBox3.text_frame; tf3.text = "Requirement Reference:"; tf3.paragraphs[0].font.bold = True
-            txBox4 = slide.shapes.add_textbox(Inches(0.5), Inches(5.2), Inches(4), Inches(1))
-            tf4 = txBox4.text_frame; tf4.text = standard_ref
+            txBox3 = slide.shapes.add_textbox(Inches(0.5), Inches(4.5), Inches(4), Inches(1)); tf3 = txBox3.text_frame; tf3.text = "Requirement Reference:"; tf3.paragraphs[0].font.bold = True
+            txBox4 = slide.shapes.add_textbox(Inches(0.5), Inches(5.2), Inches(4), Inches(1)); tf4 = txBox4.text_frame; tf4.text = standard_ref
             
-            # Add the DPPM chart as objective evidence
+            fig_dppm = go.Figure(); fig_dppm.add_trace(go.Scatter(x=supplier_data['Date'], y=supplier_data['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='red')))
+            fig_dppm.update_layout(title="DPPM Trend for Reference", yaxis_title="DPPM")
             dppm_img_bytes = fig_dppm.to_image(format="png", engine="kaleido", width=800, height=450)
             slide.shapes.add_picture(io.BytesIO(dppm_img_bytes), Inches(4.7), Inches(1.7), width=Inches(5))
             
-            # Action Required Slide
             slide = prs.slides.add_slide(prs.slide_layouts[5])
             slide.shapes.title.text = "Action Required from Supplier"
-            txBox_action = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5))
-            tf_action = txBox_action.text_frame
+            txBox_action = slide.shapes.add_textbox(Inches(1), Inches(1.5), Inches(8), Inches(5)); tf_action = txBox_action.text_frame
             tf_action.text = "Please provide the following within 14 calendar days:\n\n"
             p1 = tf_action.add_paragraph(); p1.text = "1. Interim Containment Action."; p1.level = 1
             p2 = tf_action.add_paragraph(); p2.text = "2. Completed 8D Root Cause Analysis."; p2.level = 1
             p3 = tf_action.add_paragraph(); p3.text = "3. Proposed Corrective and Preventive Actions."; p3.level = 1
             p4 = tf_action.add_paragraph(); p4.text = "4. Plan for implementation and validation of actions."; p4.level = 1
 
-            # Save to buffer
             ppt_buffer = io.BytesIO(); prs.save(ppt_buffer); ppt_buffer.seek(0)
             
             st.success("SCAR generated successfully!")
