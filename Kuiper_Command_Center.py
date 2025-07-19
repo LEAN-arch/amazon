@@ -23,7 +23,7 @@ def generate_data():
         'Type': ['Foundry', 'OSAT', 'OSAT', 'Foundry', 'OSAT'],
         'Location': ['Austin, TX', 'Penang, Malaysia', 'Hsinchu, Taiwan', 'Phoenix, AZ', 'Manila, Philippines'],
         'lat': [30.2672, 5.4145, 24.8138, 33.4484, 14.5995], 'lon': [-97.7431, 100.3327, 120.9676, -112.0740, 120.9842],
-        'Health_Score': [92, 78, 95, 85, 65], 'Open_SCARs': [0, 1, 0, 1, 3], 'AS9100D_Cert': ['Yes', 'Yes', 'Yes', 'Yes', 'In Progress']
+        'Health_Score': [92, 78, 95, 85, 65], 'Open_SCARs': [0, 1, 3, 1, 4], 'AS9100D_Cert': ['Yes', 'Yes', 'Yes', 'Yes', 'In Progress']
     })
     
     date_rng = pd.to_datetime(pd.date_range(start='2023-01-01', end='2023-09-30', freq='D'))
@@ -98,20 +98,17 @@ with col2:
 with col3:
     latest_dppm = agg_perf_30d.iloc[-1]['DPPM']
     st.metric("Aggregate DPPM (Daily)", f"{int(latest_dppm)}")
-    # The sparkline remains here for its high-level, at-a-glance value.
     st.plotly_chart(create_sparkline(agg_perf_30d, 'DPPM', 'red'), use_container_width=True, key="spark_dppm")
     st.caption("Defects Per Million across all OSATs.")
 
 st.divider()
 
-# --- NEW ENHANCEMENT: Detailed DPPM Trend Chart ---
 st.subheader("Aggregate DPPM Trend (Last 30 Days)")
 st.markdown("""
 - **What:** A detailed view of the aggregated Defects Per Million (DPPM) for all OSAT suppliers over the past 30 days.
 - **How:** The red line represents the daily DPPM, which can be noisy. The **blue line is a 7-day moving average**, which smooths out the daily fluctuations to reveal the true underlying trend.
 - **Why (Actionability):** This chart is critical for understanding the overall health of the manufacturing backend. A sustained upward trend in the moving average, even with daily dips, is a strong signal of systemic quality degradation that requires investigation at a portfolio level.
 """)
-# Calculate moving average for the new chart
 agg_perf_30d['DPPM_MA'] = agg_perf_30d['DPPM'].rolling(window=7).mean()
 
 fig_dppm_detailed = go.Figure()
@@ -129,7 +126,7 @@ st.divider()
 col1, col2 = st.columns((2, 1))
 with col1:
     st.subheader("Supplier Scorecard Matrix")
-    st.markdown("- **Actionability:** This is the primary tool for prioritizing attention. A supplier with a low Health Score and high DPPM requires immediate investigation.")
+    st.markdown("- **Actionability:** Prioritize attention on suppliers with red cells. `PackagePro OSAT` requires immediate investigation.")
     summary_df = suppliers.copy()
     latest_perf = perf_df.loc[perf_df.groupby('Supplier')['Date'].idxmax()]
     summary_df = pd.merge(summary_df, latest_perf[['Supplier', 'Yield', 'DPPM']], on='Supplier')
@@ -143,17 +140,44 @@ with col1:
         return df.style.map(color_health, subset=['Health_Score']).map(color_dppm, subset=['DPPM']).format({'Yield': "{:.2%}"})
     st.dataframe(style_scorecard(summary_df[['Supplier', 'Type', 'Health_Score', 'Yield', 'DPPM', 'Open_SCARs']]), use_container_width=True)
     
-    st.subheader("ML: Supplier Risk Forecast (Next Quarter)")
-    st.markdown("- **Actionability:** This proactively identifies suppliers who are *trending* towards poor performance, enabling preventive action instead of reactive fire-fighting.")
-    summary_df['Risk_Prob'] = (100 - summary_df['Health_Score']) / 100.0 + summary_df['Open_SCARs'] * 0.1
+    st.subheader("ML: Strategic Supplier Risk Matrix")
+    st.markdown("""
+    - **What:** A bubble chart that plots suppliers based on their current performance (`Health_Score`) vs. their current issue load (`Open_SCARs`). The bubble's color and size represent the final ML-predicted risk probability.
+    - **How:** The chart is divided into four strategic quadrants based on the average of each axis.
+    - **Why (Actionability):** This visualization provides a much deeper insight than a simple ranked list. It allows an SQE to instantly diagnose the *type* of risk a supplier represents and deploy the correct mitigation strategy for each quadrant, as explained below the chart.
+    """)
+    
+    summary_df['Risk_Prob'] = (100 - summary_df['Health_Score']) / 100.0 + summary_df['Open_SCARs'] * 0.15
     summary_df['Risk_Prob'] = np.clip(summary_df['Risk_Prob'], 0.05, 0.95)
-    fig_risk = px.bar(summary_df.sort_values('Risk_Prob', ascending=True), 
-                      x='Risk_Prob', y='Supplier', orientation='h', 
-                      title="Predicted Probability of Becoming 'At Risk'",
-                      labels={'Risk_Prob': 'Probability', 'Supplier': ''},
-                      text=summary_df['Risk_Prob'].apply(lambda x: f'{x:.0%}'))
-    fig_risk.update_traces(marker_color=summary_df['Risk_Prob'], marker_colorscale='Reds')
-    st.plotly_chart(fig_risk, use_container_width=True, key="risk_forecast_chart")
+
+    avg_health = summary_df['Health_Score'].mean()
+    avg_scars = summary_df['Open_SCARs'].mean()
+
+    fig_risk_matrix = px.scatter(
+        summary_df, x="Health_Score", y="Open_SCARs", size="Risk_Prob", color="Risk_Prob",
+        color_continuous_scale="Reds", hover_name="Supplier", text="Supplier", size_max=60,
+        title="Supplier Risk Diagnostic Matrix",
+        labels={ "Health_Score": "Performance Risk (Lower Health Score = Higher Risk →)", "Open_SCARs": "Issue Risk (More SCARs = Higher Risk ↑)", "Risk_Prob": "Predicted Risk" },
+        hover_data={'Health_Score': ':.1f', 'Open_SCARs': True, 'Risk_Prob': ':.0%'}
+    )
+    fig_risk_matrix.update_traces(textposition='top center')
+    fig_risk_matrix.update_xaxes(autorange="reversed")
+    fig_risk_matrix.add_vline(x=avg_health, line_dash="dash", line_color="gray")
+    fig_risk_matrix.add_hline(y=avg_scars, line_dash="dash", line_color="gray")
+    st.plotly_chart(fig_risk_matrix, use_container_width=True, key="risk_matrix_chart")
+
+    st.subheader("How to Act on This Matrix (Actionability Guide)")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.warning("🔴 **Top-Right: Chronic Problems**")
+        st.caption("(`PackagePro OSAT`, `AeroChip Test`)\n- **Diagnosis:** Low performance AND a high number of open issues. These are our most troubled suppliers.\n- **Action:** Immediate, deep-dive intervention. Executive-level business reviews and potentially initiating a 2nd source qualification.")
+        st.success("🟢 **Bottom-Left: Stable & Healthy**")
+        st.caption("(`Global Wafer Inc.`)\n- **Diagnosis:** High performance and few open issues. These are our top partners.\n- **Action:** Maintain strong relationship, monitor, and leverage for new projects. Less intensive management required.")
+    with c2:
+        st.warning("🟠 **Top-Left: Process Instability**")
+        st.caption("*(No suppliers currently in this quadrant)*\n- **Diagnosis:** Good historical performers who are currently struggling with specific, documented problems.\n- **Action:** Focus on driving SCARs to closure. Provide technical support to resolve issues quickly before performance degrades further.")
+        st.warning("🟡 **Bottom-Right: Silent Decline**")
+        st.caption("(`Quantum Assembly`, `Silicon Foundry Corp.`)\n- **Diagnosis:** Performance is degrading, but there are few formal, documented issues. This is a subtle but dangerous category.\n- **Action:** Proactive investigation. Perform a process audit or deep dive into their SPC data to find the undiagnosed root cause of the performance slip.")
 
 with col2:
     st.subheader("Supplier Health Distribution")
@@ -171,8 +195,6 @@ with col2:
     st.subheader("Top Failure Modes (Pareto Chart)")
     st.markdown("- **Actionability:** Applies the Pareto Principle (80/20 rule). Focusing improvement efforts on the top 1-2 failure modes will yield the largest quality impact.")
     failure_counts = failures['Failure_Mode'].value_counts().reset_index()
-    fig_pareto = px.bar(failure_counts.head(5), 
-                        x='count', y='Failure_Mode', orientation='h',
-                        labels={'Failure_Mode': '', 'count': 'Number of Incidents'}, text='count')
+    fig_pareto = px.bar(failure_counts.head(5), x='count', y='Failure_Mode', orientation='h', labels={'Failure_Mode': '', 'count': 'Number of Incidents'}, text='count')
     fig_pareto.update_layout(yaxis={'categoryorder':'total ascending'}, height=300, margin=dict(t=20, b=10))
     st.plotly_chart(fig_pareto, use_container_width=True, key="pareto_failures")
