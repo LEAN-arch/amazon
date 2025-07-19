@@ -13,6 +13,15 @@ if 'app_data' not in st.session_state:
 failures = st.session_state['app_data']['failures']
 suppliers = st.session_state['app_data']['suppliers']
 
+# --- STATE INITIALIZATION FOR THIS PAGE'S WIDGETS ---
+# This is the key to fixing the traceability plot.
+# We initialize a flag to track if the form has been run.
+if 'traceability_run' not in st.session_state:
+    st.session_state.traceability_run = False
+if 'traced_lot_id' not in st.session_state:
+    st.session_state.traced_lot_id = ""
+
+
 # --- UI RENDER ---
 st.markdown("# 🔧 Failure Analysis & Root Cause System (FRACAS)")
 st.markdown("This hub is the engine for our closed-loop quality system, integrating statistical analysis, root cause drill-down, and traceability to drive continuous improvement in line with **ISO 9001/AS9100** corrective action principles.")
@@ -65,18 +74,35 @@ with tab_8d:
     col1, col2 = st.columns([1, 1.5])
     with col1:
         with st.form("8d_form_enhanced"):
-            st.text_input("Part Number", "KU-ASIC-COM-001"); st.selectbox("Supplier", suppliers['Supplier'].unique()); st.text_input("Wafer / Assembly Lot ID", "A-LOT-7891", help="Enter a Lot ID to retrieve historical process data.")
-            st.text_area("Problem Description (D2)", "During OQC, 5 devices from Lot #A-LOT-7891 showed lifted wire bonds on Pad 14.")
-            st.multiselect("Team Members (D1)", ["J. Doe (SQE)", "S. Smith (Design)", "R. Chen (Supplier Quality)"]); submitted = st.form_submit_button("Launch Investigation & Trace Lot")
+            st.text_input("Part Number", "KU-ASIC-COM-001"); 
+            st.selectbox("Supplier", suppliers['Supplier'].unique())
+            lot_id_input = st.text_input("Wafer / Assembly Lot ID", "A-LOT-7891", help="Enter a Lot ID to retrieve historical process data.")
+            st.text_area("Problem Description (D2)", f"During OQC, 5 devices from Lot {lot_id_input} showed lifted wire bonds on Pad 14.")
+            st.multiselect("Team Members (D1)", ["J. Doe (SQE)", "S. Smith (Design)", "R. Chen (Supplier Quality)"])
+            submitted = st.form_submit_button("Launch Investigation & Trace Lot")
+            
+            # --- CORRECTED LOGIC (PART 1) ---
+            # When the button is clicked, set the session state flags.
+            if submitted:
+                st.session_state.traceability_run = True
+                st.session_state.traced_lot_id = lot_id_input
+
     with col2:
-        st.markdown("##### Traceability & Process Context"); st.caption("Data associated with the entered Lot ID appears here.")
-        if submitted:
+        st.markdown("##### Traceability & Process Context"); 
+        st.caption("Data associated with the entered Lot ID appears here.")
+        
+        # --- CORRECTED LOGIC (PART 2) ---
+        # Display the results IF the session state flag is True.
+        # This ensures the plot persists across reruns.
+        if st.session_state.traceability_run:
             with st.container(border=True):
-                st.success(f"**Traceability Data Found for Lot A-LOT-7891:**"); st.metric("Final Test Yield for this Lot", "97.3%", delta="-2.2% vs. Avg", delta_color="inverse")
+                st.success(f"**Traceability Data Found for Lot {st.session_state.traced_lot_id}:**")
+                st.metric("Final Test Yield for this Lot", "97.3%", delta="-2.2% vs. Avg", delta_color="inverse")
                 st.markdown("**Associated Process Control Data:**")
-                np.random.seed(10); sim_spc_data = np.random.normal(loc=150, scale=0.5, size=10); sim_spc_data[7:9] += 1.5
+                np.random.seed(hash(st.session_state.traced_lot_id) % (2**32 - 1)) # Seed with lot id for consistent random data
+                sim_spc_data = np.random.normal(loc=150, scale=0.5, size=10); sim_spc_data[7:9] += 1.5
                 fig_lot_spc = go.Figure(); fig_lot_spc.add_trace(go.Scatter(y=sim_spc_data, mode='lines+markers', name='Bonding Temp')); fig_lot_spc.add_hline(y=151, line=dict(dash="dot", color="red"), name="UCL")
-                fig_lot_spc.update_layout(height=200, title="Wire Bonder Temp (°C) during Lot Run", margin=dict(t=30, b=10))
+                fig_lot_spc.update_layout(height=200, title=f"Wire Bonder Temp (°C) during Lot Run", margin=dict(t=30, b=10))
                 st.plotly_chart(fig_lot_spc, use_container_width=True, key="lot_spc_trace")
                 st.warning("**Insight:** A temperature excursion was detected during this lot's production run, providing a strong potential root cause for the wire bond failures.")
 with tab_cl:
