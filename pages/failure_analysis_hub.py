@@ -18,7 +18,10 @@ st.markdown("# 🔧 Failure Analysis & Root Cause System (FRACAS)")
 st.markdown("This hub is the engine for our closed-loop quality system, integrating statistical analysis, root cause drill-down, and traceability to drive continuous improvement in line with **ISO 9001/AS9100** corrective action principles.")
 
 st.subheader("1. Failure Rate Statistical Process Control (p-Chart)")
-st.markdown("- **Why (Actionability):** This is a direct implementation of the JD's requirement for **\"early detection of process excursions.\"** A point outside the red control limits is a statistically significant signal (a \"special cause\") that the process has changed. This is an unambiguous, data-driven trigger to **launch an 8D investigation**.")
+st.markdown("""
+- **What:** A p-Chart monitoring the proportion of defective ASIC units over time, plotted against statistically calculated Upper and Lower Control Limits (UCL/LCL).
+- **Why (Actionability):** This is a direct implementation of the JD's requirement for **"early detection of process excursions."** A point outside the red control limits is a statistically significant signal (a "special cause") that the process has changed. This is an unambiguous, data-driven trigger to **launch an 8D investigation** and is a core tool for any Six Sigma practitioner or CQE.
+""")
 
 @st.cache_data
 def generate_spc_data():
@@ -43,7 +46,9 @@ st.divider()
 tab_rca, tab_8d, tab_cl = st.tabs(["2. Root Cause Analysis (RCA) Drill-Down", "3. 8D Investigation & Traceability", "Closed-Loop Visualizer"])
 with tab_rca:
     st.subheader("2. Interactive Root Cause Analysis Dashboard")
-    st.markdown("- **Why (Actionability):** This powerful visual moves beyond just counting failures to analyzing their systemic origins, a principle central to **IATF 16949**. For example, we can see that 'Wire Bond Lift' is primarily caused by 'Incorrect Bonding Parameter', pointing to a need for better supplier training or specification control, potentially referencing **JEDEC** or **IPC** standards.")
+    st.markdown("""
+    - **Why (Actionability):** This powerful visual moves beyond just counting failures to analyzing their systemic origins, a principle central to **IATF 16949**. For example, we can see that 'Wire Bond Lift' is primarily caused by 'Incorrect Bonding Parameter', pointing to a need for better supplier training or specification control, potentially referencing **JEDEC** or **IPC** standards.
+    """)
     @st.cache_data
     def get_rca_data():
         return pd.DataFrame([{'Failure_ID': 'FA-003', 'Failure_Mode': 'Package Crack', 'Root_Cause': 'Incorrect Mold Temp'}, {'Failure_ID': 'FA-004', 'Failure_Mode': 'ESD Damage', 'Root_Cause': 'Improper Grounding'}, {'Failure_ID': 'FA-006', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'}, {'Failure_ID': 'FA-007', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Pad Contamination'}, {'Failure_ID': 'FA-008', 'Failure_Mode': 'Package Crack', 'Root_Cause': 'Incorrect Mold Temp'}, {'Failure_ID': 'FA-009', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'}, {'Failure_ID': 'FA-010', 'Failure_Mode': 'ESD Damage', 'Root_Cause': 'Improper Grounding'}, {'Failure_ID': 'FA-011', 'Failure_Mode': 'Gate Oxide Leakage', 'Root_Cause': 'Fab Process Excursion'}, {'Failure_ID': 'FA-012', 'Failure_Mode': 'Wire Bond Lift', 'Root_Cause': 'Incorrect Bonding Parameter'}])
@@ -54,7 +59,9 @@ with tab_rca:
 
 with tab_8d:
     st.subheader("3. 8D Investigation Workflow with Device Traceability")
-    st.markdown("- **Why (Actionability):** This directly demonstrates the JD's requirement to be a **\"subject matter expert in device traceability.\"** By linking a failure back to its specific production lot and process data (as mandated by standards like **IPC-1782**), the root cause investigation is accelerated.")
+    st.markdown("""
+    - **Why (Actionability):** This directly demonstrates the JD's requirement to be a **\"subject matter expert in device traceability.\"** By linking a failure back to its specific production lot and process data (as mandated by standards like **IPC-1782**), the root cause investigation is accelerated.
+    """)
     col1, col2 = st.columns([1, 1.5])
     with col1:
         with st.form("8d_form_enhanced"):
