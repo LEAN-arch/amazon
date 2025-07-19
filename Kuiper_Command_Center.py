@@ -98,10 +98,34 @@ with col2:
 with col3:
     latest_dppm = agg_perf_30d.iloc[-1]['DPPM']
     st.metric("Aggregate DPPM (Daily)", f"{int(latest_dppm)}")
+    # The sparkline remains here for its high-level, at-a-glance value.
     st.plotly_chart(create_sparkline(agg_perf_30d, 'DPPM', 'red'), use_container_width=True, key="spark_dppm")
     st.caption("Defects Per Million across all OSATs.")
 
 st.divider()
+
+# --- NEW ENHANCEMENT: Detailed DPPM Trend Chart ---
+st.subheader("Aggregate DPPM Trend (Last 30 Days)")
+st.markdown("""
+- **What:** A detailed view of the aggregated Defects Per Million (DPPM) for all OSAT suppliers over the past 30 days.
+- **How:** The red line represents the daily DPPM, which can be noisy. The **blue line is a 7-day moving average**, which smooths out the daily fluctuations to reveal the true underlying trend.
+- **Why (Actionability):** This chart is critical for understanding the overall health of the manufacturing backend. A sustained upward trend in the moving average, even with daily dips, is a strong signal of systemic quality degradation that requires investigation at a portfolio level.
+""")
+# Calculate moving average for the new chart
+agg_perf_30d['DPPM_MA'] = agg_perf_30d['DPPM'].rolling(window=7).mean()
+
+fig_dppm_detailed = go.Figure()
+fig_dppm_detailed.add_trace(go.Scatter(x=agg_perf_30d['Date'], y=agg_perf_30d['DPPM'], mode='lines', name='Daily DPPM', line=dict(color='lightcoral')))
+fig_dppm_detailed.add_trace(go.Scatter(x=agg_perf_30d['Date'], y=agg_perf_30d['DPPM_MA'], mode='lines', name='7-Day Moving Avg', line=dict(color='navy', width=3)))
+fig_dppm_detailed.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Defects Per Million (DPPM)",
+    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+)
+st.plotly_chart(fig_dppm_detailed, use_container_width=True, key="dppm_detailed_chart")
+
+st.divider()
+
 col1, col2 = st.columns((2, 1))
 with col1:
     st.subheader("Supplier Scorecard Matrix")
