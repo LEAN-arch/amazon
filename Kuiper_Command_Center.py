@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- ATOMIC DATA INITIALIZATION FUNCTION (CORRECTED ASIC SME VERSION) ---
+# --- ATOMIC DATA INITIALIZATION FUNCTION ---
 @st.cache_data
 def generate_data():
     """
@@ -30,7 +30,6 @@ def generate_data():
     
     date_rng = pd.to_datetime(pd.date_range(start='2023-01-01', end='2023-09-30', freq='D'))
     
-    # --- Frontend (Foundry) Specific Data ---
     foundry_perf_data = []
     for supplier in ['Global Wafer Inc.', 'Silicon Foundry Corp.']:
         base_yield = 0.96; base_d0 = 0.12
@@ -38,10 +37,8 @@ def generate_data():
             yield_val = base_yield + (np.random.rand() * 0.03) - (np.sin(date.dayofyear / 40) * 0.02)
             d0_val = base_d0 + (np.random.rand() * 0.05) + (np.sin(date.dayofyear / 60) * 0.03)
             foundry_perf_data.append([date, supplier, yield_val, d0_val])
-    # THIS IS THE KEY FIX: The key is now correctly 'foundry_perf'
     data['foundry_perf'] = pd.DataFrame(foundry_perf_data, columns=['Date', 'Supplier', 'Wafer_Sort_Yield', 'Defect_Density_D0'])
 
-    # --- Backend (OSAT) Specific Data ---
     osat_perf_data = []
     for supplier in ['Quantum Assembly', 'AeroChip Test', 'PackagePro OSAT']:
         base_fty = 0.99; base_assy_yield = 0.995; base_dppm = 75
@@ -50,11 +47,9 @@ def generate_data():
             assy_yield_val = base_assy_yield - (np.random.rand() * 0.005)
             dppm_val = base_dppm + np.random.randint(-20, 60)
             osat_perf_data.append([date, supplier, fty_val, assy_yield_val, dppm_val])
-    # THIS IS THE KEY FIX: The key is now correctly 'osat_perf'
     data['osat_perf'] = pd.DataFrame(osat_perf_data, columns=['Date', 'Supplier', 'Final_Test_Yield', 'Assembly_Yield', 'DPPM'])
     data['osat_perf'].loc[(data['osat_perf']['Supplier'] == 'PackagePro OSAT') & (data['osat_perf']['Date'] > '2023-08-15'), 'DPPM'] += 150
 
-    # --- ASIC-Specific Failure Modes ---
     data['failures'] = pd.DataFrame({
         'Failure_ID': ['FA-001', 'FA-002', 'FA-003', 'FA-004', 'FA-005', 'FA-006'], 
         'Part_Number': ['KU-ASIC-COM-001', 'KU-ASIC-PWR-003', 'KU-ASIC-COM-001', 'KU-ASIC-RF-002', 'KU-ASIC-PWR-003', 'KU-ASIC-RF-002'],
@@ -98,6 +93,18 @@ st.subheader("Key Performance Indicators (Last 30 Days)")
 agg_osat_30d = osat_perf[osat_perf['Date'] >= osat_perf['Date'].max() - pd.Timedelta(days=30)].groupby('Date').mean(numeric_only=True).reset_index()
 agg_foundry_30d = foundry_perf[foundry_perf['Date'] >= foundry_perf['Date'].max() - pd.Timedelta(days=30)].groupby('Date').mean(numeric_only=True).reset_index()
 
+# --- CORRECTED LOGIC FOR KPI CALCULATION ---
+# 1. Create a mapping from supplier name to supplier type
+supplier_type_map = pd.Series(suppliers.Type.values, index=suppliers.Supplier).to_dict()
+
+# 2. Add a 'Type' column to the failures dataframe using the map
+failures['Type'] = failures['Supplier'].map(supplier_type_map)
+
+# 3. Use the new 'Type' column for simple, correct filtering
+open_failures = failures[failures['Status'] != 'Closed']
+osat_issues = open_failures[open_failures['Type'] == 'OSAT'].shape[0]
+foundry_issues = open_failures[open_failures['Type'] == 'Foundry'].shape[0]
+
 st.markdown("##### Backend (OSAT) Health")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -109,7 +116,6 @@ with col2:
     st.metric("Aggregate OSAT DPPM", f"{int(latest_dppm)}")
     st.caption("**What:** Defects Per Million shipped to Kuiper. **Why:** This is the ultimate measure of outgoing quality from our OSAT partners, directly impacting the reliability of the Kuiper constellation. **Standard:** **AS9100D Clause 8.4** (Control of External Providers).")
 with col3:
-    osat_issues = failures[(failures['Status'] != 'Closed') & (suppliers.loc[suppliers['Supplier'] == failures['Supplier'], 'Type'].iloc[0] == 'OSAT' if not failures.empty else False)].shape[0]
     st.metric("Active OSAT Issues", f"{osat_issues}")
     st.caption("**What:** Open SCARs/FAs related to assembly and test. **Why:** Tracks the active problem-solving workload for the backend supply chain.")
 
@@ -124,7 +130,6 @@ with col5:
     st.metric("Avg. Defect Density (D0)", f"{latest_d0:.3f}")
     st.caption("**What:** The number of random defects per square centimeter on the wafer. **Why:** A direct measure of the foundry's fab cleanliness and process control. A rising D0 is a leading indicator of future reliability problems. **Standard:** A core metric in semiconductor manufacturing physics.")
 with col6:
-    foundry_issues = failures[(failures['Status'] != 'Closed') & (suppliers.loc[suppliers['Supplier'] == failures['Supplier'], 'Type'].iloc[0] == 'Foundry' if not failures.empty else False)].shape[0]
     st.metric("Active Foundry Issues", f"{foundry_issues}")
     st.caption("**What:** Open SCARs/FAs related to wafer fabrication. **Why:** Tracks the problem-solving workload for the most critical part of the supply chain.")
 
